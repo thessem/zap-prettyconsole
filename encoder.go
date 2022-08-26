@@ -174,6 +174,9 @@ func (e *prettyConsoleEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore
 		enc.addIndentedString("stacktrace", strings.TrimPrefix(entry.Stack, "\n"))
 	}
 
+	// We're done :)
+	enc.buf.AppendString(enc.cfg.LineEnding)
+
 	// Make a (shallow) copy of buffer so encoder can be freed
 	buf := enc.buf
 	putPrettyConsoleEncoder(enc)
