@@ -80,37 +80,38 @@ func (e *prettyConsoleEncoder) clone() *prettyConsoleEncoder {
 	return clone
 }
 
-func (e *prettyConsoleEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
-	enc := e.clone()
-	enc.listSep = enc.cfg.ConsoleSeparator
-	enc.level = entry.Level
-	raw := rawStringAppender{enc}
+func (e prettyConsoleEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
+	e.buf = getBuffer()
+
+	e.listSep = e.cfg.ConsoleSeparator
+	e.level = entry.Level
+	raw := rawStringAppender{&e}
 
 	// Add preamble
-	if enc.cfg.TimeKey != "" && enc.cfg.EncodeTime != nil {
-		enc.cfg.EncodeTime(entry.Time, raw)
+	if e.cfg.TimeKey != "" && e.cfg.EncodeTime != nil {
+		e.cfg.EncodeTime(entry.Time, raw)
 	}
-	if enc.cfg.LevelKey != "" && enc.cfg.EncodeLevel != nil {
-		enc.cfg.EncodeLevel(entry.Level, raw)
+	if e.cfg.LevelKey != "" && e.cfg.EncodeLevel != nil {
+		e.cfg.EncodeLevel(entry.Level, raw)
 	}
-	if entry.LoggerName != "" && enc.cfg.NameKey != "" && enc.cfg.EncodeName != nil {
-		enc.cfg.EncodeName(entry.LoggerName, raw)
+	if entry.LoggerName != "" && e.cfg.NameKey != "" && e.cfg.EncodeName != nil {
+		e.cfg.EncodeName(entry.LoggerName, raw)
 	}
 	if entry.Caller.Defined {
-		if enc.cfg.CallerKey != "" && enc.cfg.EncodeCaller != nil {
-			enc.cfg.EncodeCaller(entry.Caller, raw)
+		if e.cfg.CallerKey != "" && e.cfg.EncodeCaller != nil {
+			e.cfg.EncodeCaller(entry.Caller, raw)
 		}
-		if enc.cfg.FunctionKey != "" {
+		if e.cfg.FunctionKey != "" {
 			raw.AppendString(entry.Caller.Function)
 		}
 	}
-	raw.AppendString(colorize(enc.colorizeAtLevel(">"), colorBold))
+	raw.AppendString(colorize(e.colorizeAtLevel(">"), colorBold))
 
 	// Add the message itself.
-	if entry.Message != "" && enc.cfg.MessageKey != "" {
-		enc.addSeparator()
-		enc.appendSafeByte([]byte(entry.Message))
-		enc.inList = true
+	if entry.Message != "" && e.cfg.MessageKey != "" {
+		e.addSeparator()
+		e.appendSafeByte([]byte(entry.Message))
+		e.inList = true
 	}
 
 	// Slice apart slices by namespaces so we're sorting within namespaces, so the Namespace fields retain their relative position
@@ -156,32 +157,28 @@ func (e *prettyConsoleEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore
 	for _, fs := range fieldss {
 		for _, f := range fs {
 			if f.Type == zapcore.ErrorType {
-				if err := enc.encodeError(f.Key, f.Interface.(error)); err != nil {
-					_ = enc.encodeError(f.Key+"_PANIC_DISPLAYING_ERROR", err)
+				if err := e.encodeError(f.Key, f.Interface.(error)); err != nil {
+					_ = e.encodeError(f.Key+"_PANIC_DISPLAYING_ERROR", err)
 				}
-				enc.inList = false
+				e.inList = false
 			} else {
-				f.AddTo(enc)
+				f.AddTo(&e)
 			}
 		}
 	}
 
 	// Write the stacktrace
-	if entry.Stack != "" && enc.cfg.StacktraceKey != "" {
-		enc.OpenNamespace("")
-		enc.namespaceIndent += len("stacktrace=")
-		enc.keyPrefix = ""
-		enc.addIndentedString("stacktrace", strings.TrimPrefix(entry.Stack, "\n"))
+	if entry.Stack != "" && e.cfg.StacktraceKey != "" {
+		e.OpenNamespace("")
+		e.namespaceIndent += len("stacktrace=")
+		e.keyPrefix = ""
+		e.addIndentedString("stacktrace", strings.TrimPrefix(entry.Stack, "\n"))
 	}
 
 	// We're done :)
-	enc.buf.AppendString(enc.cfg.LineEnding)
+	e.buf.AppendString(e.cfg.LineEnding)
 
-	// Make a (shallow) copy of buffer so encoder can be freed
-	buf := enc.buf
-	putPrettyConsoleEncoder(enc)
-
-	return buf, nil
+	return e.buf, nil
 }
 
 func (e *prettyConsoleEncoder) addSeparator() {
