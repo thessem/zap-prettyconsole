@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pkgerrors "github.com/pkg/errors"
+	"go.uber.org/zap/buffer"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/multierr"
@@ -30,7 +31,7 @@ func TestEncodeEntry(t *testing.T) {
 		{
 			desc: "Minimal",
 			// 4:33PM INF >
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m",
+			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\n",
 			ent: zapcore.Entry{
 				Level: zap.InfoLevel,
 				Time:  time.Date(2018, 6, 19, 16, 33, 42, 99, time.UTC),
@@ -41,7 +42,7 @@ func TestEncodeEntry(t *testing.T) {
 			desc: "Basic",
 			// 4:33PM INF TestLogger ../<some_file>:<line_number> > log\nmessage complex=-8+12i duration=3h0m0s float=-30000000000000 int=0 string=test_\n_value time=2022-06-19T16:33:42Z
 			//   ↳ strings=[\u001b1, 2\t]
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1mTestLogger\x1b[0m\x1b[32m \x1b[0m\x1b[1m../<some_file>:<line_number>\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mlog\x1b[32m\\n\x1b[0mmessage\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mcomplex=\x1b[0m-8+12i\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mduration=\x1b[0m3h0m0s\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mfloat=\x1b[0m-30000000000000\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mint=\x1b[0m0\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mstring=\x1b[0mtest_\x1b[32m\\n\x1b[0m_value\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mtime=\x1b[0m2022-06-19T16:33:42Z\n  \x1b[32m↳\x1b[0m \x1b[32mstrings\x1b[0m\x1b[32m=[\x1b[0m\x1b[32m\\u00\x1b[0m\x1b[32m1\x1b[0m\x1b[32mb\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m\\t\x1b[0m\x1b[32m]\x1b[0m",
+			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1mTestLogger\x1b[0m\x1b[32m \x1b[0m\x1b[1m../<some_file>:<line_number>\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mlog\x1b[32m\\n\x1b[0mmessage\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mcomplex\x1b[0m\x1b[32m=\x1b[0m-8+12i\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mduration\x1b[0m\x1b[32m=\x1b[0m3h0m0s\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mfloat\x1b[0m\x1b[32m=\x1b[0m-30000000000000\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mint\x1b[0m\x1b[32m=\x1b[0m0\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mstring\x1b[0m\x1b[32m=\x1b[0mtest_\x1b[32m\\n\x1b[0m_value\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mtime\x1b[0m\x1b[32m=\x1b[0m2022-06-19T16:33:42Z\n\x1b[32m  ↳ strings\x1b[0m\x1b[32m=[\x1b[0m\x1b[32m\\u00\x1b[0m\x1b[32m1\x1b[0m\x1b[32mb\x1b[0m1\x1b[32m\x1b[0m2\x1b[32m\\t\x1b[0m\x1b[32m]\x1b[0m\n",
 			ent: zapcore.Entry{
 				Level:      zap.InfoLevel,
 				Time:       time.Date(2018, 6, 19, 16, 33, 42, 99, time.UTC),
@@ -66,7 +67,7 @@ func TestEncodeEntry(t *testing.T) {
 			//             .namespace2.string4=val4 .string5=val5
 			//                        .namespace3.namespace4.string6=val6 .string7=val7
 			//                                              .namespace5
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mtest message\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mtest_string=\x1b[0mtest_message\n  \x1b[32m↳\x1b[0m \x1b[32mnamespace\x1b[0m\x1b[32m.\x1b[0m\x1b[32mstring2=\x1b[0mval2\x1b[32m \x1b[0m\x1b[32m.\x1b[0m\x1b[32mstring3=\x1b[0mval3\n             \x1b[32m.namespace2\x1b[0m\x1b[32m.\x1b[0m\x1b[32mstring4=\x1b[0mval4\x1b[32m \x1b[0m\x1b[32m.\x1b[0m\x1b[32mstring5=\x1b[0mval5\n                        \x1b[32m.namespace3\x1b[0m\x1b[32m.namespace4\x1b[0m\x1b[32m.\x1b[0m\x1b[32mstring6=\x1b[0mval6\x1b[32m \x1b[0m\x1b[32m.\x1b[0m\x1b[32mstring7=\x1b[0mval7\n                                              \x1b[32m.namespace5\x1b[0m",
+			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mtest message\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32mtest_string\x1b[0m\x1b[32m=\x1b[0mtest_message\n\x1b[32m  ↳ namespace\x1b[0m\x1b[32m.\x1b[0m\x1b[32mstring2\x1b[0m\x1b[32m=\x1b[0mval2\x1b[32m \x1b[0m\x1b[32m.\x1b[0m\x1b[32mstring3\x1b[0m\x1b[32m=\x1b[0mval3\n             \x1b[32m.namespace2\x1b[0m\x1b[32m.\x1b[0m\x1b[32mstring4\x1b[0m\x1b[32m=\x1b[0mval4\x1b[32m \x1b[0m\x1b[32m.\x1b[0m\x1b[32mstring5\x1b[0m\x1b[32m=\x1b[0mval5\n                        \x1b[32m.namespace3\x1b[0m\x1b[32m.namespace4\x1b[0m\x1b[32m.\x1b[0m\x1b[32mstring6\x1b[0m\x1b[32m=\x1b[0mval6\x1b[32m \x1b[0m\x1b[32m.\x1b[0m\x1b[32mstring7\x1b[0m\x1b[32m=\x1b[0mval7\n                                              \x1b[32m.namespace5\x1b[0m\n",
 			ent: zapcore.Entry{
 				Level:   zapcore.InfoLevel,
 				Message: "test message",
@@ -99,7 +100,7 @@ func TestEncodeEntry(t *testing.T) {
 			//                         "r9", "r10",
 			//                       }
 			//             .2=trailing_value
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mtest message\n  \x1b[32m↳\x1b[0m \x1b[32mobject\x1b[0m\x1b[32m.1\x1b[0m\x1b[32m.1\x1b[0m\x1b[32m.\x1b[0m\x1b[32m1_leading_value=\x1b[0mleading_value\n              \x1b[32m.2\x1b[0m\x1b[32m.\x1b[0m\x1b[32m1=\x1b[0mstring\n                \x1b[32m.2\x1b[0m\x1b[32m=[\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m, \x1b[0m3\x1b[32m, \x1b[0m4\x1b[32m]\x1b[0m\n                \x1b[32m.3\x1b[0m\x1b[32m=\x1b[0m2.000000\n                \x1b[32m.4\x1b[0m\x1b[32m.r1\x1b[0m\x1b[32m=\x1b[0m[]string{\n                        \"r1\", \"r2\", \"r3\", \"r4\", \"r5\", \"r6\", \"r7\", \"r8\",\n                        \"r9\", \"r10\",\n                      }\x1b[32m\n            \x1b[0m\x1b[32m.\x1b[0m\x1b[32m2=\x1b[0mtrailing_value",
+			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mtest message\n\x1b[32m  ↳ object\x1b[0m\x1b[32m.1\x1b[0m\x1b[32m.1\x1b[0m\x1b[32m.\x1b[0m\x1b[32m1_leading_value\x1b[0m\x1b[32m=\x1b[0mleading_value\n              \x1b[32m.2\x1b[0m\x1b[32m.\x1b[0m\x1b[32m1\x1b[0m\x1b[32m=\x1b[0mstring\n                \x1b[32m.2\x1b[0m\x1b[32m=[\x1b[0m1\x1b[32m\x1b[0m2\x1b[32m\x1b[0m3\x1b[32m\x1b[0m4\x1b[32m]\x1b[0m\n                \x1b[32m.3\x1b[0m\x1b[32m=\x1b[0m2.000000\n                \x1b[32m.4\x1b[0m\x1b[32m.r1\x1b[0m\x1b[32m=\x1b[0m[]string{\n                        \"r1\", \"r2\", \"r3\", \"r4\", \"r5\", \"r6\", \"r7\", \"r8\",\n                        \"r9\", \"r10\",\n                      }\x1b[32m\n            \x1b[0m\x1b[32m.\x1b[0m\x1b[32m2\x1b[0m\x1b[32m=\x1b[0mtrailing_value\n",
 			ent: zapcore.Entry{
 				Level:   zapcore.InfoLevel,
 				Message: "test message",
@@ -138,7 +139,7 @@ func TestEncodeEntry(t *testing.T) {
 			//			   {3=3 4=4}
 			//		      ]
 			//		     ]
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mtest message\n  \x1b[32m↳\x1b[0m \x1b[32marray\x1b[0m\x1b[32m=[\x1b[0m\x1b[32m[\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m, \x1b[0m3\x1b[32m, \x1b[0m4\x1b[32m]\x1b[0m\x1b[32m, \x1b[0m\n           \x1b[32m[\x1b[0m\x1b[32m]\x1b[0m\x1b[32m, \x1b[0m\n           \x1b[32m[\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m, \x1b[0m3\x1b[32m, \x1b[0m\n            \x1b[32m[\x1b[0m1\x1b[32m]\x1b[0m\n           \x1b[32m]\x1b[0m\x1b[32m, \x1b[0m\n           \x1b[32m[\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m, \x1b[0m3\x1b[32m, \x1b[0m\n            \x1b[32m[\x1b[0m\x1b[32m{\x1b[0m\x1b[32m\x1b[0m\x1b[32m3=\x1b[0m3\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32m4=\x1b[0m4\x1b[32m}\x1b[0m\x1b[32m]\x1b[0m\n           \x1b[32m]\x1b[0m\x1b[32m, \x1b[0m\n           \x1b[32m[\x1b[0m\x1b[32m{\x1b[0m\x1b[32m\x1b[0m\x1b[32m1=\x1b[0m1\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32m2=\x1b[0m2\x1b[32m}\x1b[0m\x1b[32m, \x1b[0m3\x1b[32m, \x1b[0m4\x1b[32m, \x1b[0m5\x1b[32m]\x1b[0m\x1b[32m, \x1b[0m\n           \x1b[32m[\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m, \x1b[0m\n            \x1b[32m{\x1b[0m\x1b[32m\x1b[0m\x1b[32m3=\x1b[0m3\x1b[32m \x1b[0m\x1b[32m\x1b[0m\x1b[32m4=\x1b[0m4\x1b[32m}\x1b[0m\n           \x1b[32m]\x1b[0m\n          \x1b[32m]\x1b[0m",
+			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mtest message\n\x1b[32m  ↳ array\x1b[0m\x1b[32m=[\x1b[0m\x1b[32m[\x1b[0m1\x1b[32m\x1b[0m2\x1b[32m\x1b[0m3\x1b[32m\x1b[0m4\x1b[32m]\x1b[0m\x1b[32m\x1b[0m\n           \x1b[32m[\x1b[0m\x1b[32m]\x1b[0m\x1b[32m\x1b[0m\n           \x1b[32m[\x1b[0m1\x1b[32m\x1b[0m2\x1b[32m\x1b[0m3\x1b[32m\x1b[0m\n            \x1b[32m[\x1b[0m1\x1b[32m]\x1b[0m\n           \x1b[32m]\x1b[0m\x1b[32m\x1b[0m\n           \x1b[32m[\x1b[0m1\x1b[32m\x1b[0m2\x1b[32m\x1b[0m3\x1b[32m\x1b[0m\n            \x1b[32m[\x1b[0m\x1b[32m{\x1b[0m\x1b[32m\x1b[0m\x1b[32m3\x1b[0m\x1b[32m=\x1b[0m3\x1b[32m\x1b[0m\x1b[32m\x1b[0m\x1b[32m4\x1b[0m\x1b[32m=\x1b[0m4\x1b[32m}\x1b[0m\x1b[32m]\x1b[0m\n           \x1b[32m]\x1b[0m\x1b[32m\x1b[0m\n           \x1b[32m[\x1b[0m\x1b[32m{\x1b[0m\x1b[32m\x1b[0m\x1b[32m1\x1b[0m\x1b[32m=\x1b[0m1\x1b[32m\x1b[0m\x1b[32m\x1b[0m\x1b[32m2\x1b[0m\x1b[32m=\x1b[0m2\x1b[32m}\x1b[0m\x1b[32m\x1b[0m3\x1b[32m\x1b[0m4\x1b[32m\x1b[0m5\x1b[32m]\x1b[0m\x1b[32m\x1b[0m\n           \x1b[32m[\x1b[0m1\x1b[32m\x1b[0m2\x1b[32m\x1b[0m\n            \x1b[32m{\x1b[0m\x1b[32m\x1b[0m\x1b[32m3\x1b[0m\x1b[32m=\x1b[0m3\x1b[32m\x1b[0m\x1b[32m\x1b[0m\x1b[32m4\x1b[0m\x1b[32m=\x1b[0m4\x1b[32m}\x1b[0m\n           \x1b[32m]\x1b[0m\n          \x1b[32m]\x1b[0m\n",
 			ent: zapcore.Entry{
 				Level:   zapcore.InfoLevel,
 				Message: "test message",
@@ -159,7 +160,7 @@ func TestEncodeEntry(t *testing.T) {
 			desc: "Minimal Error",
 			// 4:33PM ERR > test message
 			//   ↳ error=Something \nwent wrong
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[31m \x1b[0m\x1b[31mERR\x1b[0m\x1b[31m \x1b[0m\x1b[1m\x1b[31m>\x1b[0m\x1b[0m\x1b[31m \x1b[0mtest message\n  \x1b[31m↳\x1b[0m \x1b[31merror\x1b[0m\x1b[31m=\x1b[0mSomething \x1b[31m\\n\x1b[0mwent wrong",
+			expected: "\x1b[90m4:33PM\x1b[0m\x1b[31m \x1b[0m\x1b[31mERR\x1b[0m\x1b[31m \x1b[0m\x1b[1m\x1b[31m>\x1b[0m\x1b[0m\x1b[31m \x1b[0mtest message\n\x1b[31m  ↳ error\x1b[0m\x1b[31m=\x1b[0mSomething \x1b[31m\\n\x1b[0mwent wrong\n",
 			ent: zapcore.Entry{
 				Level:   zapcore.ErrorLevel,
 				Message: "test message",
@@ -221,7 +222,7 @@ func TestEncodeEntry(t *testing.T) {
 			//				/<some_file>:<line_number>
 			//			   testing.tRunner
 			//				/<some_file>:<line_number>
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[31m \x1b[0m\x1b[31mERR\x1b[0m\x1b[31m \x1b[0m\x1b[1m\x1b[31m>\x1b[0m\x1b[0m\x1b[31m \x1b[0mtest message\x1b[31m \x1b[0m\x1b[31m\x1b[0m\x1b[31mnamed_stracktrace=\x1b[<module_name>.TestEncodeEntry\x1b[31m\\n\x1b[0m\x1b[31m\\t\x1b[<module_name>/<some_file>:<line_number>\x1b[31m\\n\x1b[0mtesting.tRunner\x1b[31m\\n\x1b[0m\x1b[31m\\t\x1b[0m/<some_file>:<line_number>\n  \x1b[31m↳\x1b[0m \x1b[31merror\x1b[0m\x1b[31m=\x1b[0msomething \x1b[31m\\n\x1b[0mwent wrong\n  \x1b[31m↳\x1b[0m \x1b[31mnested\x1b[0m\x1b[31m=\x1b[0merror with stacktrace: error with 2 causes: cause 1; deeper error with two causes: deeper cause 1; deeper cause 2\n           \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0merror with stacktrace: error with 2 causes: cause 1; deeper error with two causes: deeper cause 1; deeper cause 2\n                  \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0merror with 2 causes: cause 1; deeper error with two causes: deeper cause 1; deeper cause 2\n                         \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0merror with 2 causes: cause 1; deeper error with two causes: deeper cause 1; deeper cause 2\n                                \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0mcause 1; deeper error with two causes: deeper cause 1; deeper cause 2\n                                       \x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mcause 1\n                                                \x1b[31m.\x1b[0m\x1b[31mstacktrace=\x1b[<module_name>.TestEncodeEntry\n                                                            \t<module_name>/<some_file>:<line_number>\n                                                            testing.tRunner\n                                                            \t/<some_file>:<line_number>\n                                                            runtime.goexit\n                                                            \t/<some_file>:<line_number>\n                                       \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mdeeper error with two causes: deeper cause 1; deeper cause 2\n                                                \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0mdeeper error with two causes: deeper cause 1; deeper cause 2\n                                                       \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0mdeeper cause 1; deeper cause 2\n                                                              \x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mdeeper cause 1\n                                                              \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mdeeper cause 2\n                                                \x1b[31m.\x1b[0m\x1b[31mstacktrace=\x1b[<module_name>.TestEncodeEntry\n                                                            \t<module_name>/<some_file>:<line_number>\n                                                            testing.tRunner\n                                                            \t/<some_file>:<line_number>\n                                                            runtime.goexit\n                                                            \t/<some_file>:<line_number>\n                         \x1b[31m.\x1b[0m\x1b[31mstacktrace=\x1b[<module_name>.TestEncodeEntry\n                                     \t<module_name>/<some_file>:<line_number>\n                                     testing.tRunner\n                                     \t/<some_file>:<line_number>\n                                     runtime.goexit\n                                     \t/<some_file>:<line_number>\n           \x1b[31m.\x1b[0m\x1b[31mstacktrace=\x1b[<module_name>.TestEncodeEntry\n                       \t<module_name>/<some_file>:<line_number>\n                       testing.tRunner\n                       \t/<some_file>:<line_number>\n                       runtime.goexit\n                       \t/<some_file>:<line_number>\n  \x1b[31m↳\x1b[0m \x1b[31mnil_panic_PANIC_DISPLAYING_ERROR\x1b[0m\x1b[31m=\x1b[0mPANIC=runtime error: invalid memory address or nil pointer dereference\n  \x1b[31m↳\x1b[0m \x1b[31mnormal_panic\x1b[0m\x1b[31m=\x1b[0m<nil>\n  \x1b[31m↳\x1b[0m \x1b[31mstack\x1b[0m\x1b[31m=\x1b[0man error with a stacktrace has occurred\n          \x1b[31m.\x1b[0m\x1b[31mstacktrace=\x1b[<module_name>.TestEncodeEntry\n                      \t<module_name>/<some_file>:<line_number>\n                      testing.tRunner\n                      \t/<some_file>:<line_number>\n                      runtime.goexit\n                      \t/<some_file>:<line_number>\n  \x1b[31m↳\x1b[0m \x1b[31m\x1b[0m\x1b[31mstacktrace=\x1b[<module_name>.TestEncodeEntry\n               \t<module_name>/<some_file>:<line_number>\n               testing.tRunner\n               \t/<some_file>:<line_number>",
+			expected: "\x1b[90m4:33PM\x1b[0m\x1b[31m \x1b[0m\x1b[31mERR\x1b[0m\x1b[31m \x1b[0m\x1b[1m\x1b[31m>\x1b[0m\x1b[0m\x1b[31m \x1b[0mtest message\x1b[31m \x1b[0m\x1b[31m\x1b[0m\x1b[31mnamed_stracktrace\x1b[0m\x1b[31m=\x1b[<module_name>.TestEncodeEntry\x1b[31m\\n\x1b[0m\x1b[31m\\t\x1b[<module_name>/<some_file>:<line_number>\x1b[31m\\n\x1b[0mtesting.tRunner\x1b[31m\\n\x1b[0m\x1b[31m\\t\x1b[0m/<some_file>:<line_number>\n\x1b[31m  ↳ error\x1b[0m\x1b[31m=\x1b[0msomething \x1b[31m\\n\x1b[0mwent wrong\n\x1b[31m  ↳ nested\x1b[0m\x1b[31m=\x1b[0merror with stacktrace: error with 2 causes: cause 1; deeper error with two causes: deeper cause 1; deeper cause 2\n           \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0merror with stacktrace: error with 2 causes: cause 1; deeper error with two causes: deeper cause 1; deeper cause 2\n                  \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0merror with 2 causes: cause 1; deeper error with two causes: deeper cause 1; deeper cause 2\n                         \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0merror with 2 causes: cause 1; deeper error with two causes: deeper cause 1; deeper cause 2\n                                \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0mcause 1; deeper error with two causes: deeper cause 1; deeper cause 2\n                                       \x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mcause 1\n                                                \x1b[31m.\x1b[0m\x1b[31mstacktrace\x1b[0m\x1b[31m=\x1b[<module_name>.TestEncodeEntry\n                                                            \t<module_name>/<some_file>:<line_number>\n                                                            testing.tRunner\n                                                            \t/<some_file>:<line_number>\n                                                            runtime.goexit\n                                                            \t/<some_file>:<line_number>\n                                       \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mdeeper error with two causes: deeper cause 1; deeper cause 2\n                                                \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0mdeeper error with two causes: deeper cause 1; deeper cause 2\n                                                       \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0mdeeper cause 1; deeper cause 2\n                                                              \x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mdeeper cause 1\n                                                              \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mdeeper cause 2\n                                                \x1b[31m.\x1b[0m\x1b[31mstacktrace\x1b[0m\x1b[31m=\x1b[<module_name>.TestEncodeEntry\n                                                            \t<module_name>/<some_file>:<line_number>\n                                                            testing.tRunner\n                                                            \t/<some_file>:<line_number>\n                                                            runtime.goexit\n                                                            \t/<some_file>:<line_number>\n                         \x1b[31m.\x1b[0m\x1b[31mstacktrace\x1b[0m\x1b[31m=\x1b[<module_name>.TestEncodeEntry\n                                     \t<module_name>/<some_file>:<line_number>\n                                     testing.tRunner\n                                     \t/<some_file>:<line_number>\n                                     runtime.goexit\n                                     \t/<some_file>:<line_number>\n           \x1b[31m.\x1b[0m\x1b[31mstacktrace\x1b[0m\x1b[31m=\x1b[<module_name>.TestEncodeEntry\n                       \t<module_name>/<some_file>:<line_number>\n                       testing.tRunner\n                       \t/<some_file>:<line_number>\n                       runtime.goexit\n                       \t/<some_file>:<line_number>\n\x1b[31m  ↳ nil_panic_PANIC_DISPLAYING_ERROR\x1b[0m\x1b[31m=\x1b[0mPANIC=runtime error: invalid memory address or nil pointer dereference\n\x1b[31m  ↳ normal_panic\x1b[0m\x1b[31m=\x1b[0m<nil>\n\x1b[31m  ↳ stack\x1b[0m\x1b[31m=\x1b[0man error with a stacktrace has occurred\n          \x1b[31m.\x1b[0m\x1b[31mstacktrace\x1b[0m\x1b[31m=\x1b[<module_name>.TestEncodeEntry\n                      \t<module_name>/<some_file>:<line_number>\n                      testing.tRunner\n                      \t/<some_file>:<line_number>\n                      runtime.goexit\n                      \t/<some_file>:<line_number>\n\x1b[31m  ↳ \x1b[0m\x1b[31m\x1b[0m\x1b[31mstacktrace\x1b[0m\x1b[31m=\x1b[<module_name>.TestEncodeEntry\n               \t<module_name>/<some_file>:<line_number>\n               testing.tRunner\n               \t/<some_file>:<line_number>\n",
 			ent: zapcore.Entry{
 				Level:   zapcore.ErrorLevel,
 				Message: "test message",
@@ -249,7 +250,7 @@ func TestEncodeEntry(t *testing.T) {
 		},
 	}
 
-	enc, _ := NewEncoder(NewEncoderConfig())
+	enc := NewEncoder(NewEncoderConfig())
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
@@ -320,4 +321,54 @@ func (t testArray) MarshalLogArray(encoder zapcore.ArrayEncoder) error {
 		}
 	}
 	return nil
+}
+
+func TestIndentingWriter(t *testing.T) {
+	tests := []struct {
+		desc     string
+		expected string
+		input    string
+	}{
+		{
+			desc:     "Empty",
+			input:    "",
+			expected: "",
+		},
+		{
+			desc:     "No newlines",
+			input:    "hello",
+			expected: "hello",
+		},
+		{
+			desc:     "Newlines",
+			input:    "hello\nHow are\n\nYou?\n",
+			expected: "hello\n  How are\n  \n  You?\n  ",
+		},
+		{
+			desc:     "Trailing newline",
+			input:    "T\n",
+			expected: "T\n  ",
+		},
+		{
+			desc:     "Leading newline",
+			input:    "\nT",
+			expected: "\n  T",
+		},
+		{
+			desc:     "Only newline",
+			input:    "\n",
+			expected: "\n  ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			buf := buffer.Buffer{}
+			iw := indentingWriter{indent: 2, buf: &buf}
+			n, err := iw.Write([]byte(tt.input))
+			assert.NoError(t, err)
+			assert.Equal(t, buf.Len(), n)
+			assert.Equal(t, tt.expected, buf.String())
+		})
+	}
 }

@@ -27,6 +27,9 @@ func putPrettyConsoleEncoder(e *prettyConsoleEncoder) {
 
 	e.namespaceIndent = 0
 	e.inList = false
+	e.listSep = ""
+	e._listSepSpace = ""
+	e._listSepComma = ""
 
 	_prettyConsolePool.Put(e)
 }

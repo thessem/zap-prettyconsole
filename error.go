@@ -30,7 +30,7 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 	enc := e.clone()
 	enc.OpenNamespace(key)
 
-	enc.buf.AppendString(enc.colorizeAtLevel("="))
+	enc.colorizeAtLevel("=")
 	enc.namespaceIndent += 1
 	enc.inList = true
 
@@ -43,11 +43,12 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 			// value receiver, and in either case, "<nil>" is a nice result.
 			if v := reflect.ValueOf(err); v.Kind() != reflect.Ptr || v.IsNil() {
 				retErr = fmt.Errorf("PANIC=%v", rerr)
+				putPrettyConsoleEncoder(enc)
 				return
 			}
 			enc.addSafeString("<nil>")
 		}
-		e.buf.AppendString(enc.buf.String())
+		e.buf.Write(enc.buf.Bytes())
 		putPrettyConsoleEncoder(enc)
 
 		e.inList = true

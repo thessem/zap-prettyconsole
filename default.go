@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Code-Hex/dd"
+	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -27,7 +28,10 @@ const (
 
 func DefaultTimeEncoder(format string) func(time.Time, zapcore.PrimitiveArrayEncoder) {
 	return func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
-		enc.AppendString(colorize(t.Format(format), colorDarkGray))
+		buf := _bufferPoolGet()
+		colorize(buf, t.Format(format), strconv.Itoa(colorDarkGray))
+		enc.AppendString(buf.String())
+		buf.Free()
 	}
 }
 
@@ -35,16 +39,18 @@ func defaultDurationEncoder(dur time.Duration, enc zapcore.PrimitiveArrayEncoder
 	enc.AppendString(dur.String())
 }
 
-var defaultColours = map[zapcore.Level]func(string) string{
+const defaultColourOffset = 2
+
+var defaultColours = [10][]string{
 	// DIY trace level
-	zapcore.DebugLevel - 1: func(s string) string { return colorize(s, colorDarkGray) },
-	zapcore.DebugLevel:     func(s string) string { return colorize(s, colorCyan) },
-	zapcore.InfoLevel:      func(s string) string { return colorize(s, colorGreen) },
-	zapcore.WarnLevel:      func(s string) string { return colorize(s, colorYellow) },
-	zapcore.ErrorLevel:     func(s string) string { return colorize(s, colorRed) },
-	zapcore.FatalLevel:     func(s string) string { return colorize(colorize(s, colorRed), colorBold) },
-	zapcore.DPanicLevel:    func(s string) string { return colorize(colorize(s, colorRed), colorBold) },
-	zapcore.PanicLevel:     func(s string) string { return colorize(colorize(s, colorRed), colorBold) },
+	zapcore.DebugLevel - 1 + defaultColourOffset: {strconv.Itoa(colorDarkGray)},
+	zapcore.DebugLevel + defaultColourOffset:     {strconv.Itoa(colorCyan)},
+	zapcore.InfoLevel + defaultColourOffset:      {strconv.Itoa(colorGreen)},
+	zapcore.WarnLevel + defaultColourOffset:      {strconv.Itoa(colorYellow)},
+	zapcore.ErrorLevel + defaultColourOffset:     {strconv.Itoa(colorRed)},
+	zapcore.FatalLevel + defaultColourOffset:     {strconv.Itoa(colorRed), strconv.Itoa(colorBold)},
+	zapcore.DPanicLevel + defaultColourOffset:    {strconv.Itoa(colorRed), strconv.Itoa(colorBold)},
+	zapcore.PanicLevel + defaultColourOffset:     {strconv.Itoa(colorRed), strconv.Itoa(colorBold)},
 }
 
 func defaultLevelEncoder(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
@@ -72,7 +78,11 @@ func defaultLevelEncoder(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 		l = zapcore.PanicLevel
 		str = "???"
 	}
-	enc.AppendString(defaultColours[l](str))
+
+	buf := _bufferPoolGet()
+	colorize(buf, str, defaultColours[l+defaultColourOffset]...)
+	enc.AppendString(buf.String())
+	buf.Free()
 }
 
 func defaultCallerEncoder(caller zapcore.EntryCaller, enc zapcore.PrimitiveArrayEncoder) {
@@ -82,11 +92,18 @@ func defaultCallerEncoder(caller zapcore.EntryCaller, enc zapcore.PrimitiveArray
 			str = rel
 		}
 	}
-	enc.AppendString(colorize(str, colorBold))
+
+	buf := _bufferPoolGet()
+	colorize(buf, str, strconv.Itoa(colorBold))
+	enc.AppendString(buf.String())
+	buf.Free()
 }
 
 func defaultNameEncoder(name string, enc zapcore.PrimitiveArrayEncoder) {
-	enc.AppendString(colorize(name, colorBold))
+	buf := _bufferPoolGet()
+	colorize(buf, name, strconv.Itoa(colorBold))
+	enc.AppendString(buf.String())
+	buf.Free()
 }
 
 var reflectedListBreakSize = map[interface{}]int{
@@ -128,7 +145,19 @@ func (d ddEncoder) Encode(i interface{}) error {
 	return err
 }
 
+var colorOpen = []byte{'\x1b', '['}
+
+var colorClose = []byte{'\x1b', '[', '0', 'm'}
+
 // colorize returns the string s wrapped in ANSI code c
-func colorize(s string, col int) string {
-	return "\x1b[" + strconv.Itoa(col) + "m" + s + "\x1b[0m"
+func colorize(buf *buffer.Buffer, s string, cols ...string) {
+	for _, col := range cols {
+		buf.Write(colorOpen)
+		buf.AppendString(col)
+		buf.WriteByte('m')
+	}
+	for range cols {
+		buf.AppendString(s)
+	}
+	buf.Write(colorClose)
 }
