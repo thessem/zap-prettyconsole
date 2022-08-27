@@ -119,7 +119,7 @@ func BenchmarkAccumulatedContext(b *testing.B) {
 		})
 	})
 	b.Run("Zap.Pretty", func(b *testing.B) {
-		logger := newPrettyZapLogger(zap.DebugLevel).With(fakeFields()...)
+		logger := newBenchmarkPrettyZapLogger(zap.DebugLevel).With(fakeFields()...)
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
@@ -128,7 +128,7 @@ func BenchmarkAccumulatedContext(b *testing.B) {
 		})
 	})
 	b.Run("Zap.Pretty.Sugar", func(b *testing.B) {
-		logger := newPrettyZapLogger(zap.DebugLevel).With(fakeFields()...).Sugar()
+		logger := newBenchmarkPrettyZapLogger(zap.DebugLevel).With(fakeFields()...).Sugar()
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
@@ -137,7 +137,7 @@ func BenchmarkAccumulatedContext(b *testing.B) {
 		})
 	})
 	b.Run("Zap.Pretty.SugarFormatting", func(b *testing.B) {
-		logger := newPrettyZapLogger(zap.DebugLevel).With(fakeFields()...).Sugar()
+		logger := newBenchmarkPrettyZapLogger(zap.DebugLevel).With(fakeFields()...).Sugar()
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
@@ -168,7 +168,7 @@ func BenchmarkAddingFields(b *testing.B) {
 		})
 	})
 	b.Run("Zap.Pretty", func(b *testing.B) {
-		logger := newPrettyZapLogger(zap.DebugLevel)
+		logger := newBenchmarkPrettyZapLogger(zap.DebugLevel)
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
@@ -177,7 +177,7 @@ func BenchmarkAddingFields(b *testing.B) {
 		})
 	})
 	b.Run("Zap.Pretty.Sugar", func(b *testing.B) {
-		logger := newPrettyZapLogger(zap.DebugLevel).Sugar()
+		logger := newBenchmarkPrettyZapLogger(zap.DebugLevel).Sugar()
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
@@ -271,7 +271,7 @@ func newZapLogger(lvl zapcore.Level) *zap.Logger {
 	))
 }
 
-func newPrettyZapLogger(lvl zapcore.Level) *zap.Logger {
+func newBenchmarkPrettyZapLogger(lvl zapcore.Level) *zap.Logger {
 	ec := NewEncoderConfig()
 	ec.EncodeDuration = zapcore.NanosDurationEncoder
 	ec.EncodeTime = zapcore.EpochNanosTimeEncoder

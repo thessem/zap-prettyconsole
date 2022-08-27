@@ -115,7 +115,7 @@ func (e *prettyConsoleEncoder) AppendTime(t time.Time) {
 	}
 	if cur == e.buf.Len() {
 		// User-supplied EncodeTime is a no-op. Fall back to RFC3339
-		e.AppendString(t.Format(time.RFC3339))
+		e.buf.AppendTime(t, time.RFC3339)
 	}
 
 	e.inList = true

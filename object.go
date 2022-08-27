@@ -215,8 +215,8 @@ func (e *prettyConsoleEncoder) AddString(key, value string) {
 func (e *prettyConsoleEncoder) addIndentedString(key string, s string) {
 	e.addSeparator()
 	e.addKey(key)
-	spaces := strings.Repeat(" ", e.namespaceIndent)
-	e.buf.AppendString(strings.ReplaceAll(s, "\n", "\n"+spaces))
+	iw := indentingWriter{e.buf, e.namespaceIndent}
+	iw.Write([]byte(s))
 
 	e.inList = true
 	e.listSep = e._listSepSpace
@@ -227,14 +227,7 @@ func (e *prettyConsoleEncoder) AddTime(key string, value time.Time) {
 	e.addKey(key)
 	// Don't use configured time encoder as it's been customized to display the
 	// log's time, .e.g, this will be coloured dark grey in time.Kitchen
-	//cur := e.buf.Len()
-	//if timeEncoder := e.cfg.EncodeTime; e != nil {
-	//	timeEncoder(value, e)
-	//}
-	//if cur == e.buf.Len() {
-	// User-supplied EncodeTime is a no-op. Fall back to RFC3339
-	e.buf.AppendString(value.Format(time.RFC3339))
-	//}
+	e.buf.AppendTime(value, time.RFC3339)
 
 	e.inList = true
 	e.listSep = e._listSepSpace

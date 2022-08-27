@@ -145,19 +145,11 @@ func (d ddEncoder) Encode(i interface{}) error {
 	return err
 }
 
-var colorOpen = []byte{'\x1b', '['}
-
-var colorClose = []byte{'\x1b', '[', '0', 'm'}
-
 // colorize returns the string s wrapped in ANSI code c
 func colorize(buf *buffer.Buffer, s string, cols ...string) {
 	for _, col := range cols {
-		buf.Write(colorOpen)
-		buf.AppendString(col)
-		buf.WriteByte('m')
+		buf.AppendString("\x1b[" + col + "m")
 	}
-	for range cols {
-		buf.AppendString(s)
-	}
-	buf.Write(colorClose)
+	buf.AppendString(s)
+	buf.AppendString("\x1b[0m")
 }

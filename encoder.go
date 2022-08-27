@@ -3,6 +3,7 @@ package prettyconsole
 import (
 	"bytes"
 	"io"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -64,6 +65,16 @@ func NewEncoderConfig() zapcore.EncoderConfig {
 	}
 }
 
+func NewLogger(lvl zapcore.Level) *zap.Logger {
+	ec := NewEncoderConfig()
+	enc := NewEncoder(ec)
+	return zap.New(zapcore.NewCore(
+		enc,
+		os.Stdout,
+		lvl,
+	))
+}
+
 // Test interface conformance
 var _ zapcore.Encoder = (*prettyConsoleEncoder)(nil)
 
@@ -99,6 +110,9 @@ func (e *prettyConsoleEncoder) clone() *prettyConsoleEncoder {
 	clone.inList = e.inList
 	clone.listSep = e.listSep
 	clone.keyPrefix = e.keyPrefix
+
+	clone._listSepComma = e._listSepComma
+	clone._listSepSpace = e._listSepSpace
 
 	return clone
 }
@@ -174,14 +188,9 @@ func (e prettyConsoleEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.
 	}
 	for idx, field := range fields {
 		if field.Type == zapcore.NamespaceType {
-			if fields[prev].Type == zapcore.NamespaceType {
-				sort.Slice(fields[prev+1:idx], sortFunc)
-			} else {
-				sort.Slice(fields[prev:idx], sortFunc)
-			}
-			prev = idx
-		}
-		if idx == len(fields)-1 {
+			sort.Slice(fields[prev:idx], sortFunc)
+			prev = idx + 1
+		} else if idx == len(fields)-1 {
 			sort.Slice(fields[prev:idx+1], sortFunc)
 		}
 	}
@@ -221,9 +230,7 @@ func (e *prettyConsoleEncoder) addSeparator() {
 }
 
 func (e *prettyConsoleEncoder) addKey(key string) {
-	e.colorizeAtLevel(e.keyPrefix)
-	e.colorizeAtLevel(key)
-	e.colorizeAtLevel("=")
+	e.colorizeAtLevel(e.keyPrefix + key + "=")
 }
 
 // addSafeString JSON-escapes a string and appends it to the internal buffer.
