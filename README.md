@@ -28,6 +28,7 @@ func main() {
 }
 ```
 
+<br><br>
 The above can be compared to using the zap logger in its normal development
 mode, which just shows you the data in a JSON string. This quickly gets
 hard to read!
@@ -91,7 +92,7 @@ func main() {
 }
 ```
 
-This encoder was inspired by trying to parse multiple `github. com/pkg/errors/`
+This encoder was inspired by trying to parse multiple `github.com/pkg/errors/`
 errors, each with their own stack-traces. I am a big fan of error wrapping and
 error stack-traces, I am not a fan of needing to copy text out of my terminal to
 see what happened.
