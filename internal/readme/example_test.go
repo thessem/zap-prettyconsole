@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/thessem/zap-prettyconsole"
@@ -34,7 +36,7 @@ func (u *User) MarshalLogObject(e zapcore.ObjectEncoder) error {
 	return nil
 }
 
-func Example_object() {
+func TestObject(t *testing.T) {
 	logger, _ := prettyconsole.NewConfig().Build()
 	sugarLogger := logger.Sugar()
 
@@ -62,33 +64,54 @@ func Example_object() {
 	)
 }
 
-func Example_simple() {
+func TestSingleLine(t *testing.T) {
 	logger := prettyconsole.NewLogger(zap.DebugLevel)
 	logger.Info("doesn't this look nice",
 		zap.Complex64("nice_level", 12i-14),
-		zap.Bools("nice_enough", []bool{true, false}),
+		zap.Time("the_time", time.Now()),
 	)
 }
 
-func Example_normal() {
-	logger, _ := zap.NewDevelopment()
-	logger.Info("old logger output for reference",
+func TestSimple(t *testing.T) {
+	logger := prettyconsole.NewLogger(zap.DebugLevel)
+	logger.Info("doesn't this look nice",
 		zap.Complex64("nice_level", 12i-14),
+		zap.Time("the_time", time.Now()),
 		zap.Bools("nice_enough", []bool{true, false}),
+		zap.Namespace("an_object"),
+		zap.String("field_1", "value_1"),
+		zap.String("field_2", "value_2"),
 	)
-	fmt.Println("\n\n\n\n\n")
 }
 
-func Example_configuration() {
+func TestZapConsole(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	logger.Info("doesn't this look nice",
+		zap.Complex64("nice_level", 12i-14),
+		zap.Time("the_time", time.Now()),
+		zap.Bools("nice_enough", []bool{true, false}),
+		zap.Namespace("an_object"),
+		zap.String("field_1", "value_1"),
+		zap.String("field_2", "value_2"),
+	)
+}
+
+func TestConfiguration(t *testing.T) {
 	cfg := prettyconsole.NewConfig()
 	cfg.EncoderConfig.CallerKey = zapcore.OmitKey
 	cfg.EncoderConfig.TimeKey = zapcore.OmitKey
 	cfg.EncoderConfig.ConsoleSeparator = "   "
-	logger, _ := cfg.Build()
-	logger.Debug("it's configurable!", zap.Strings("and", []string{"you", "can", "space", "it", "out"}))
+	cfg.EncoderConfig.LineEnding = "\n\n"
+	logger1, _ := cfg.Build()
+	cfg.EncoderConfig.CallerKey = "C"
+	cfg.EncoderConfig.FunctionKey = "F"
+	logger2, _ := cfg.Build()
+
+	logger1.Debug("it's configurable!", zap.Strings("and", []string{"you", "can", "space", "it", "out"}))
+	logger2.Warn("you can also add more information")
 }
 
-func Example_reflection() {
+func TestReflection(t *testing.T) {
 	logger := prettyconsole.NewLogger(zap.DebugLevel)
 	sugar := logger.Sugar()
 	sugar.Debugw("reflection uses",
@@ -101,7 +124,7 @@ func Example_reflection() {
 	)
 }
 
-func Example_errors() {
+func TestErrors(t *testing.T) {
 	logger := prettyconsole.NewLogger(zap.DebugLevel).WithOptions()
 	err := errors.Wrap(
 		errors.Wrap(

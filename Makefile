@@ -1,39 +1,31 @@
-GOLINT = golint
-STATICCHECK = staticcheck
 BENCH_FLAGS ?= -cpuprofile=cpu.pprof -memprofile=mem.pprof -benchmem
-
-MODULE_DIRS = .
-
-# Many Go tools take file globs or directories as arguments instead of packages.
-GO_FILES := $(shell \
-	find . '(' -path '*/.*' -o -path './vendor' ')' -prune \
-	-o -name '*.go' -print | cut -b3-)
 
 .PHONY: all
 all: test
 
 .PHONY: test
 test:
-	@$(foreach dir,$(MODULE_DIRS),(cd $(dir) && go test -race ./...) &&) true
-
-.PHONY: cover
-cover:
-	go test -race -coverprofile=cover.out -coverpkg=./... ./...
-	go tool cover -html=cover.out -o cover.html
+	go test -race ./...
 
 .PHONY: bench
 BENCH ?= .
 bench:
-	@$(foreach dir,$(MODULE_DIRS), ( \
-		cd $(dir) && \
-		go list ./... | xargs -n1 go test -bench=$(BENCH) -run="^$$" $(BENCH_FLAGS) \
-	) &&) true
-
-.PHONY: updatereadme
-updatereadme:
-	rm -f README.md
-	cat .readme.tmpl | go run internal/readme/readme.go > README.md
+	go test -bench=$(BENCH) -run="^$$" $(BENCH_FLAGS)
 
 .PHONY: tidy
 tidy:
-	@$(foreach dir,$(MODULE_DIRS),(cd $(dir) && go mod tidy) &&) true
+	 go mod tidy
+
+./internal/readme/images/%.png: ./internal/readme/example_test.go
+	@mkdir -p ./internal/readme/images/
+	@if [ "$*" = "ZapConsole" ]; then\
+			termshot -f $@ -- 'go test $^ -run=$* -v | sed -e "/---/,+10d" -e "/===/,1d" | fold -w 80';\
+	else\
+			termshot -f $@ -- 'go test $^ -run=$* -v | sed -e "/---/,+10d" -e "/===/,1d"';\
+	fi
+
+
+
+readme_images := $(shell go test ./internal/readme/example_test.go -v --list=. | sed -n '/^Test/p' | sed 's/Test//')
+README.md: ./internal/readme/readme.tmpl $(addprefix ./internal/readme/images/,$(addsuffix .png,$(readme_images)))
+	cat internal/readme/readme.tmpl | go run internal/readme/readme.go > README.md

@@ -50,7 +50,7 @@ func NewEncoderConfig() zapcore.EncoderConfig {
 		LevelKey:            "L",
 		TimeKey:             "T",
 		NameKey:             "N",
-		CallerKey:           "C",
+		CallerKey:           zapcore.OmitKey,
 		FunctionKey:         zapcore.OmitKey,
 		StacktraceKey:       "S",
 		SkipLineEnding:      false,
@@ -322,8 +322,9 @@ func (e rawStringAppender) AppendString(s string) {
 }
 
 type indentingWriter struct {
-	buf    io.Writer
-	indent int
+	buf        io.Writer
+	indent     int
+	lineEnding []byte
 }
 
 func (i indentingWriter) Write(p []byte) (n int, err error) {
@@ -334,8 +335,11 @@ func (i indentingWriter) Write(p []byte) (n int, err error) {
 	if idx == -1 {
 		return i.buf.Write(p)
 	}
-	written, _ := i.buf.Write(p[0 : idx+1])
+	written, _ := i.buf.Write(p[0:idx])
 	read := written
+	n, _ = i.buf.Write(i.lineEnding)
+	written += n
+	read += 1
 	for read <= len(p) {
 		for ii := 0; ii < i.indent; ii++ {
 			n, _ := i.buf.Write([]byte(" "))
@@ -349,9 +353,12 @@ func (i indentingWriter) Write(p []byte) (n int, err error) {
 			n, _ := i.buf.Write(p[read:])
 			return written + n, nil
 		}
-		n, _ = i.buf.Write(p[read : read+idx+1])
+		n, _ = i.buf.Write(p[read : read+idx])
 		written += n
 		read += n
+		n, _ = i.buf.Write(i.lineEnding)
+		written += n
+		read += 1
 	}
 	return written, nil
 }

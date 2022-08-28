@@ -35,12 +35,12 @@ func (e *prettyConsoleEncoder) AddComplex128(k string, v complex128) {
 
 func (e *prettyConsoleEncoder) OpenNamespace(key string) {
 	if e.namespaceIndent == 0 {
-		e.buf.AppendByte('\n')
+		e.buf.AppendString(e.cfg.LineEnding)
 		e.colorizeAtLevel("  ↳ " + key)
 		e.namespaceIndent = 4 + len(key)
 	} else {
 		if e.inList {
-			e.buf.AppendByte('\n')
+			e.buf.AppendString(e.cfg.LineEnding)
 			for ii := 0; ii < e.namespaceIndent; ii++ {
 				e.buf.AppendByte(' ')
 			}
@@ -67,7 +67,7 @@ func (e *prettyConsoleEncoder) AddObject(key string, marshaler zapcore.ObjectMar
 	putPrettyConsoleEncoder(enc)
 
 	e.inList = true
-	e.listSep = "\n" + strings.Repeat(" ", e.namespaceIndent)
+	e.listSep = e.cfg.LineEnding + strings.Repeat(" ", e.namespaceIndent)
 	return nil
 }
 
@@ -83,7 +83,7 @@ func (e *prettyConsoleEncoder) AddArray(key string, marshaler zapcore.ArrayMarsh
 		return err
 	}
 	if bytes.ContainsRune(enc.buf.Bytes()[l:], '\n') {
-		enc.buf.AppendByte('\n')
+		enc.buf.AppendString(e.cfg.LineEnding)
 		for ii := 0; ii < enc.namespaceIndent-1; ii++ {
 			enc.buf.AppendByte(' ')
 		}
@@ -94,7 +94,7 @@ func (e *prettyConsoleEncoder) AddArray(key string, marshaler zapcore.ArrayMarsh
 	putPrettyConsoleEncoder(enc)
 
 	e.inList = true
-	e.listSep = "\n" + strings.Repeat(" ", e.namespaceIndent)
+	e.listSep = e.cfg.LineEnding + strings.Repeat(" ", e.namespaceIndent)
 	return nil
 }
 
@@ -105,7 +105,11 @@ func (e *prettyConsoleEncoder) AddReflected(key string, value interface{}) error
 	enc.colorizeAtLevel("=")
 	enc.namespaceIndent += 1
 	l := enc.buf.Len()
-	iw := indentingWriter{enc.buf, enc.namespaceIndent}
+	iw := indentingWriter{
+		buf:        enc.buf,
+		indent:     enc.namespaceIndent,
+		lineEnding: []byte(e.cfg.LineEnding),
+	}
 
 	if reflectedEncoder := e.cfg.NewReflectedEncoder(iw); e != nil {
 		if err := reflectedEncoder.Encode(value); err != nil {
@@ -123,7 +127,7 @@ func (e *prettyConsoleEncoder) AddReflected(key string, value interface{}) error
 	putPrettyConsoleEncoder(enc)
 
 	e.inList = true
-	e.listSep = "\n" + strings.Repeat(" ", e.namespaceIndent)
+	e.listSep = e.cfg.LineEnding + strings.Repeat(" ", e.namespaceIndent)
 	return nil
 }
 
@@ -215,8 +219,12 @@ func (e *prettyConsoleEncoder) AddString(key, value string) {
 func (e *prettyConsoleEncoder) addIndentedString(key string, s string) {
 	e.addSeparator()
 	e.addKey(key)
-	iw := indentingWriter{e.buf, e.namespaceIndent}
-	iw.Write([]byte(s))
+	iw := indentingWriter{
+		buf:        e.buf,
+		indent:     e.namespaceIndent,
+		lineEnding: []byte(e.cfg.LineEnding),
+	}
+	_, _ = iw.Write([]byte(s))
 
 	e.inList = true
 	e.listSep = e._listSepSpace

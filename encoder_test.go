@@ -40,7 +40,7 @@ func TestEncodeEntry(t *testing.T) {
 			desc: "Basic",
 			// 4:33PM INF TestLogger ../<some_file>:<line_number> > log\nmessage complex=-8+12i duration=3h0m0s float=-30000000000000 int=0 string=test_\n_value time=2022-06-19T16:33:42Z
 			//   ↳ strings=[\u001b1, 2\t]
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1mTestLogger\x1b[0m\x1b[32m \x1b[0m\x1b[1m../<some_file>:<line_number>\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mlog\x1b[32m\\n\x1b[0mmessage\x1b[32m \x1b[0m\x1b[32mcomplex=\x1b[0m-8+12i\x1b[32m \x1b[0m\x1b[32mduration=\x1b[0m3h0m0s\x1b[32m \x1b[0m\x1b[32mfloat=\x1b[0m-30000000000000\x1b[32m \x1b[0m\x1b[32mint=\x1b[0m0\x1b[32m \x1b[0m\x1b[32mstring=\x1b[0mtest_\x1b[32m\\n\x1b[0m_value\x1b[32m \x1b[0m\x1b[32mtime=\x1b[0m2022-06-19T16:33:42Z\n\x1b[32m  ↳ strings\x1b[0m\x1b[32m=[\x1b[0m\x1b[32m\\u00\x1b[0m\x1b[32m1\x1b[0m\x1b[32mb\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m\\t\x1b[0m\x1b[32m]\x1b[0m\n",
+			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1mTestLogger\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mlog\x1b[32m\\n\x1b[0mmessage\x1b[32m \x1b[0m\x1b[32mcomplex=\x1b[0m-8+12i\x1b[32m \x1b[0m\x1b[32mduration=\x1b[0m3h0m0s\x1b[32m \x1b[0m\x1b[32mfloat=\x1b[0m-30000000000000\x1b[32m \x1b[0m\x1b[32mint=\x1b[0m0\x1b[32m \x1b[0m\x1b[32mstring=\x1b[0mtest_\x1b[32m\\n\x1b[0m_value\x1b[32m \x1b[0m\x1b[32mtime=\x1b[0m2022-06-19T16:33:42Z\n\x1b[32m  ↳ strings\x1b[0m\x1b[32m=[\x1b[0m\x1b[32m\\u00\x1b[0m\x1b[32m1\x1b[0m\x1b[32mb\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m\\t\x1b[0m\x1b[32m]\x1b[0m\n",
 			ent: zapcore.Entry{
 				Level:      zap.InfoLevel,
 				Time:       time.Date(2018, 6, 19, 16, 33, 42, 99, time.UTC),
@@ -338,29 +338,29 @@ func TestIndentingWriter(t *testing.T) {
 		{
 			desc:     "Newlines",
 			input:    "hello\nHow are\n\nYou?\n",
-			expected: "hello\n  How are\n  \n  You?\n  ",
+			expected: "hello\t\t  How are\t\t  \t\t  You?\t\t  ",
 		},
 		{
 			desc:     "Trailing newline",
 			input:    "T\n",
-			expected: "T\n  ",
+			expected: "T\t\t  ",
 		},
 		{
 			desc:     "Leading newline",
 			input:    "\nT",
-			expected: "\n  T",
+			expected: "\t\t  T",
 		},
 		{
 			desc:     "Only newline",
 			input:    "\n",
-			expected: "\n  ",
+			expected: "\t\t  ",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			buf := buffer.Buffer{}
-			iw := indentingWriter{indent: 2, buf: &buf}
+			iw := indentingWriter{indent: 2, buf: &buf, lineEnding: []byte{'\t', '\t'}}
 			n, err := iw.Write([]byte(tt.input))
 			assert.NoError(t, err)
 			assert.Equal(t, buf.Len(), n)

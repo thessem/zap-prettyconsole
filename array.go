@@ -134,7 +134,7 @@ func (e *prettyConsoleEncoder) AppendArray(marshaler zapcore.ArrayMarshaler) err
 		return err
 	}
 	if bytes.ContainsRune(enc.buf.Bytes()[l:], '\n') {
-		enc.buf.AppendByte('\n')
+		enc.buf.AppendString(e.cfg.LineEnding)
 		for ii := 0; ii < enc.namespaceIndent-1; ii++ {
 			enc.buf.AppendByte(' ')
 		}
@@ -162,7 +162,7 @@ func (e *prettyConsoleEncoder) AppendObject(marshaler zapcore.ObjectMarshaler) e
 		return err
 	}
 	if bytes.ContainsRune(enc.buf.Bytes()[l:], '\n') {
-		enc.buf.AppendByte('\n')
+		enc.buf.AppendString(e.cfg.LineEnding)
 		for ii := 0; ii < enc.namespaceIndent-1; ii++ {
 			enc.buf.AppendByte(' ')
 		}
@@ -184,7 +184,11 @@ func (e *prettyConsoleEncoder) AppendReflected(value interface{}) error {
 	enc.keyPrefix = ""
 	enc.inList = false
 	l := enc.buf.Len()
-	iw := indentingWriter{enc.buf, enc.namespaceIndent}
+	iw := indentingWriter{
+		buf:        enc.buf,
+		indent:     enc.namespaceIndent,
+		lineEnding: []byte(e.cfg.LineEnding),
+	}
 
 	if reflectedEncoder := e.cfg.NewReflectedEncoder(iw); e != nil {
 		if err := reflectedEncoder.Encode(value); err != nil {
