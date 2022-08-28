@@ -24,8 +24,6 @@ tidy:
 			termshot -f $@ -- 'go test $^ -run=$* -v | sed -e "/---/,+10d" -e "/===/,1d"';\
 	fi
 
-
-
 readme_images := $(shell go test ./internal/readme/example_test.go -v --list=. | sed -n '/^Test/p' | sed 's/Test//')
 README.md: ./internal/readme/readme.tmpl $(addprefix ./internal/readme/images/,$(addsuffix .png,$(readme_images)))
 	cat internal/readme/readme.tmpl | go run internal/readme/readme.go > README.md
