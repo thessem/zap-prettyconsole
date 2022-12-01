@@ -10,9 +10,20 @@ var (
 	_prettyConsolePool = sync.Pool{New: func() interface{} {
 		return &prettyConsoleEncoder{}
 	}}
+	_recorderPool = sync.Pool{New: func() interface{} {
+		return &recordingEncoder{}
+	}}
 	_bufferPool    = buffer.NewPool()
 	_bufferPoolGet = _bufferPool.Get
 )
+
+func getRecordingEncoder() *recordingEncoder {
+	return _recorderPool.Get().(*recordingEncoder)
+}
+
+func putRecordingEncoder() *recordingEncoder {
+	return _recorderPool.Get().(*recordingEncoder)
+}
 
 func getPrettyConsoleEncoder() *prettyConsoleEncoder {
 	return _prettyConsolePool.Get().(*prettyConsoleEncoder)

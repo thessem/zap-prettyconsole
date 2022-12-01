@@ -1,6 +1,7 @@
 package prettyconsole
 
 import (
+	"bytes"
 	"errors"
 	"regexp"
 	"sort"
@@ -367,4 +368,53 @@ func TestIndentingWriter(t *testing.T) {
 			assert.Equal(t, tt.expected, buf.String())
 		})
 	}
+}
+
+func TestWith(t *testing.T) {
+	cfg := NewEncoderConfig()
+	cfg.TimeKey = zapcore.OmitKey
+	enc := NewEncoder(cfg)
+	buf := testBufferWriterSync{}
+	pretty := zap.New(zapcore.NewCore(enc, &buf, zap.NewAtomicLevel()))
+
+	// Regular With
+	// WRN > wtf bark1=barv1 fook1=foov1
+	pretty1 := pretty.With(zap.String("fook1", "foov1"))
+	pretty1.Warn("wtf", zap.String("bark1", "barv1"))
+	expected := "\x1b[33mWRN\x1b[0m\x1b[33m \x1b[0m\x1b[1m\x1b[33m>\x1b[0m\x1b[0m\x1b[33m \x1b[0mwtf\x1b[33m \x1b[0m\x1b[33mbark1=\x1b[0mbarv1\x1b[33m \x1b[0m\x1b[33mfook1=\x1b[0mfoov1\n"
+	got := buf.buf.String()
+	assert.Equalf(t, expected, got, "Incorrect encoded entry, recieved: \n%v", got)
+	buf.buf.Reset()
+
+	// Adding a namespace with With
+	// WRN > wtf fook1=foov1
+	//   ↳ fook11.bark11=barv11 .bark12=barv12
+	pretty11 := pretty1.With(zap.Namespace("fook11"))
+	pretty11 = pretty11.With(zap.String("bark12", "barv12"))
+	pretty11.Warn("wtf", zap.String("bark11", "barv11"))
+	expected = "\x1b[33mWRN\x1b[0m\x1b[33m \x1b[0m\x1b[1m\x1b[33m>\x1b[0m\x1b[0m\x1b[33m \x1b[0mwtf\x1b[33m \x1b[0m\x1b[33mfook1=\x1b[0mfoov1\n\x1b[33m  ↳ fook11\x1b[0m\x1b[33m.bark11=\x1b[0mbarv11\x1b[33m \x1b[0m\x1b[33m.bark12=\x1b[0mbarv12\n"
+	got = buf.buf.String()
+	assert.Equalf(t, expected, got, "Incorrect encoded entry, recieved: \n%v", got)
+	buf.buf.Reset()
+
+	// Making sure pretty didn't get modified above
+	// WRN > wtf bark2=barv2 fook2=foov2
+	pretty2 := pretty.With(zap.String("fook2", "foov2"))
+	pretty2.Warn("wtf", zap.String("bark2", "barv2"))
+	expected = "\x1b[33mWRN\x1b[0m\x1b[33m \x1b[0m\x1b[1m\x1b[33m>\x1b[0m\x1b[0m\x1b[33m \x1b[0mwtf\x1b[33m \x1b[0m\x1b[33mbark2=\x1b[0mbarv2\x1b[33m \x1b[0m\x1b[33mfook2=\x1b[0mfoov2\n"
+	got = buf.buf.String()
+	assert.Equalf(t, expected, got, "Incorrect encoded entry, recieved: \n%v", got)
+	buf.buf.Reset()
+}
+
+type testBufferWriterSync struct {
+	buf bytes.Buffer
+}
+
+func (w *testBufferWriterSync) Sync() error {
+	return nil
+}
+
+func (w *testBufferWriterSync) Write(p []byte) (int, error) {
+	return w.buf.Write(p)
 }

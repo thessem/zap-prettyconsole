@@ -31,8 +31,8 @@ func NewConfig() zap.Config {
 }
 
 func NewEncoder(cfg zapcore.EncoderConfig) zapcore.Encoder {
-	return &prettyConsoleEncoder{
-		buf:             _bufferPoolGet(),
+	return &recordingEncoder{e: prettyConsoleEncoder{
+		buf:             nil,
 		cfg:             &cfg,
 		level:           0,
 		namespaceIndent: 0,
@@ -41,7 +41,7 @@ func NewEncoder(cfg zapcore.EncoderConfig) zapcore.Encoder {
 		_listSepComma: "," + cfg.ConsoleSeparator,
 		_listSepSpace: cfg.ConsoleSeparator,
 		listSep:       cfg.ConsoleSeparator,
-	}
+	}}
 }
 
 func NewEncoderConfig() zapcore.EncoderConfig {
@@ -93,13 +93,14 @@ type prettyConsoleEncoder struct {
 	_listSepSpace string
 }
 
-func (e *prettyConsoleEncoder) Clone() zapcore.Encoder {
+// Clone implements zapcore.Encoder
+func (e prettyConsoleEncoder) Clone() zapcore.Encoder {
 	clone := e.clone()
 	_, _ = clone.buf.Write(e.buf.Bytes())
 	return clone
 }
 
-func (e *prettyConsoleEncoder) clone() *prettyConsoleEncoder {
+func (e prettyConsoleEncoder) clone() *prettyConsoleEncoder {
 	clone := getPrettyConsoleEncoder()
 	clone.buf = getBuffer()
 

@@ -126,28 +126,28 @@ Log a message and 10 fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 1002 ns/op | +0% | 5 allocs/op
-| :zap: zap (sugared) | 1277 ns/op | +27% | 10 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 2769 ns/op | +176% | 11 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 3125 ns/op | +212% | 16 allocs/op
+| :zap: zap | 624 ns/op | +0% | 5 allocs/op
+| :zap: zap (sugared) | 923 ns/op | +48% | 10 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 1825 ns/op | +192% | 12 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 2123 ns/op | +240% | 17 allocs/op
 
 Log a message with a logger that already has 10 fields of context:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 105 ns/op | +0% | 0 allocs/op
-| :zap: zap (sugared) | 138 ns/op | +31% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 231 ns/op | +120% | 3 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 242 ns/op | +130% | 4 allocs/op
+| :zap: zap | 72 ns/op | +0% | 0 allocs/op
+| :zap: zap (sugared) | 83 ns/op | +15% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 1510 ns/op | +1997% | 7 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 1516 ns/op | +2006% | 8 allocs/op
 
 Log a static string, without any context or `printf`-style templating:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 101 ns/op | +0% | 0 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 109 ns/op | +8% | 0 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 137 ns/op | +36% | 1 allocs/op
-| :zap: zap (sugared) | 138 ns/op | +37% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 56 ns/op | -14% | 0 allocs/op
+| :zap: zap | 65 ns/op | +0% | 0 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 75 ns/op | +15% | 1 allocs/op
+| :zap: zap (sugared) | 79 ns/op | +22% | 1 allocs/op
 
 ## Current Status
 I think this project is mostly working. I have not used it for any serious
