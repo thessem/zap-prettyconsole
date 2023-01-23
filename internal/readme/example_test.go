@@ -6,10 +6,11 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/thessem/zap-prettyconsole"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/thessem/zap-prettyconsole"
 )
 
 type User struct {
