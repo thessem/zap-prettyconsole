@@ -107,6 +107,26 @@ I am a big fan of error wrapping and error stacktraces, I am not a fan of needin
 When objects that do not satisfy `ObjectMarshaler` are logged, zap-prettyconsole will use reflection (via the delightful [dd][dd] library) to print it instead:
 ![reflection](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/Reflection.png?raw=true)
 
+Strings passed to the logger will have their formatting printed and colourised, but you can opt out of this and print the raw strings.
+
+![formatting](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/Formatting.png?raw=true)
+
+Generated using:
+
+```go
+logger := prettyconsole.NewLogger(zap.DebugLevel)
+// Non-sugared version
+logger = logger.With(prettyconsole.FormattedString("sql", "SELECT * FROM\n\tusers\nWHERE\n\tname = 'James'"))
+sugar := logger.Sugar()
+mdb := "db.users.find({\n\tname: \"\x1b[31mJames\x1b[0m\"\n});"
+sugar.Debugw("string formatting",
+	zap.Namespace("mdb"),
+	// Sugared version
+	"formatted", prettyconsole.FormattedStringValue(mdb),
+	"unformatted", mdb,
+)
+```
+
 This encoder respects all the normal encoder configuration settings.
 You can change your separator character, newline characters, add caller/function information and add stacktraces if you like.
 

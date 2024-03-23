@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/thessem/zap-prettyconsole"
+	prettyconsole "github.com/thessem/zap-prettyconsole"
 )
 
 type User struct {
@@ -122,6 +122,20 @@ func TestReflection(t *testing.T) {
 			Foo int
 			Bar bool
 		}{42, true},
+	)
+}
+
+func TestFormatting(t *testing.T) {
+	logger := prettyconsole.NewLogger(zap.DebugLevel)
+	// Non-sugared version
+	logger = logger.With(prettyconsole.FormattedString("sql", "SELECT * FROM\n\tusers\nWHERE\n\tname = 'James'"))
+	sugar := logger.Sugar()
+	mdb := "db.users.find({\n\tname: \"\x1b[31mJames\x1b[0m\"\n});"
+	sugar.Debugw("string formatting",
+		zap.Namespace("mdb"),
+		// Sugared version
+		"formatted", prettyconsole.FormattedStringValue(mdb),
+		"unformatted", mdb,
 	)
 }
 

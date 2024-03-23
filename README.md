@@ -107,6 +107,26 @@ I am a big fan of error wrapping and error stacktraces, I am not a fan of needin
 When objects that do not satisfy `ObjectMarshaler` are logged, zap-prettyconsole will use reflection (via the delightful [dd][dd] library) to print it instead:
 ![reflection](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/Reflection.png?raw=true)
 
+Strings passed to the logger will have their formatting printed and colourised, but you can opt out of this and print the raw strings.
+
+![formatting](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/Formatting.png?raw=true)
+
+Generated using:
+
+```go
+logger := prettyconsole.NewLogger(zap.DebugLevel)
+// Non-sugared version
+logger = logger.With(prettyconsole.FormattedString("sql", "SELECT * FROM\n\tusers\nWHERE\n\tname = 'James'"))
+sugar := logger.Sugar()
+mdb := "db.users.find({\n\tname: \"\x1b[31mJames\x1b[0m\"\n});"
+sugar.Debugw("string formatting",
+	zap.Namespace("mdb"),
+	// Sugared version
+	"formatted", prettyconsole.FormattedStringValue(mdb),
+	"unformatted", mdb,
+)
+```
+
 This encoder respects all the normal encoder configuration settings.
 You can change your separator character, newline characters, add caller/function information and add stacktraces if you like.
 
@@ -123,28 +143,28 @@ Log a message and 10 fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 526 ns/op | +0% | 5 allocs/op
-| :zap: zap (sugared) | 848 ns/op | +61% | 10 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 1872 ns/op | +256% | 12 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 2454 ns/op | +367% | 17 allocs/op
+| :zap: zap | 529 ns/op | +0% | 5 allocs/op
+| :zap: zap (sugared) | 858 ns/op | +62% | 10 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 1904 ns/op | +260% | 12 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 2372 ns/op | +348% | 17 allocs/op
 
 Log a message with a logger that already has 10 fields of context:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
 | :zap: zap | 52 ns/op | +0% | 0 allocs/op
-| :zap: zap (sugared) | 65 ns/op | +25% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 1678 ns/op | +3127% | 7 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 1691 ns/op | +3152% | 8 allocs/op
+| :zap: zap (sugared) | 64 ns/op | +23% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 1565 ns/op | +2910% | 7 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 1637 ns/op | +3048% | 8 allocs/op
 
 Log a static string, without any context or `printf`-style templating:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 38 ns/op | +0% | 0 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 47 ns/op | +24% | 0 allocs/op
-| :zap: zap (sugared) | 60 ns/op | +58% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 60 ns/op | +58% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 36 ns/op | -16% | 0 allocs/op
+| :zap: zap | 43 ns/op | +0% | 0 allocs/op
+| :zap: zap (sugared) | 58 ns/op | +35% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 62 ns/op | +44% | 1 allocs/op
 
 Released under the [MIT License](LICENSE.txt)
 

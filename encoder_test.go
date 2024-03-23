@@ -9,11 +9,10 @@ import (
 	"time"
 
 	pkgerrors "github.com/pkg/errors"
-	"go.uber.org/zap/buffer"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
+	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -86,6 +85,31 @@ func TestEncodeEntry(t *testing.T) {
 				zap.String("string7", "val7"),
 				zap.String("string6", "val6"),
 				zap.Namespace("namespace5"),
+			},
+		},
+		{
+			desc: "Pre-formatted strings",
+			// 4:33PM INF > test message test_string=test_message
+			//   ↳ colours=RED STRING!
+			//   ↳ namespace.mdb=db.users.find({
+			// 						name: "James"
+			// 				  });
+			// 			 .sql=SELECT * FROM
+			// 						users
+			// 				  WHERE
+			// 						name = 'James'
+			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mtest message\x1b[32m \x1b[0m\x1b[32mtest_string=\x1b[0mtest_message\n\x1b[32m  ↳ colours\x1b[0m\x1b[32m=\x1b[0m\x1b[0m\x1b[31mRED STRING!\x1b[0m\x1b[31m\n\x1b[32m  ↳ namespace\x1b[0m\x1b[32m.mdb\x1b[0m\x1b[32m=\x1b[0mdb.users.find({\n                  \tname: \"James\"\n                  });\n             \x1b[32m.sql\x1b[0m\x1b[32m=\x1b[0mSELECT * FROM\n                  \tusers\n                  WHERE\n                  \tname = 'James'\n",
+			ent: zapcore.Entry{
+				Level:   zapcore.InfoLevel,
+				Message: "test message",
+				Time:    time.Date(2018, 6, 19, 16, 33, 42, 99, time.UTC),
+			},
+			fields: []zapcore.Field{
+				zap.String("test_string", "test_message"),
+				FormattedString("colours", "\x1b[0m\x1b[31mRED STRING!\x1b[0m\x1b[31m"),
+				zap.Namespace("namespace"),
+				FormattedString("sql", "SELECT * FROM\n\tusers\nWHERE\n\tname = 'James'"),
+				zap.Any("mdb", FormattedStringValue("db.users.find({\n\tname: \"James\"\n});")),
 			},
 		},
 		{

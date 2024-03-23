@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -26,9 +27,11 @@ func (e *prettyConsoleEncoder) AddUintptr(k string, v uintptr) { e.AddUint64(k, 
 func (e *prettyConsoleEncoder) AddBinary(key string, value []byte) {
 	e.AddString(key, base64.StdEncoding.EncodeToString(value))
 }
+
 func (e *prettyConsoleEncoder) AddComplex64(k string, v complex64) {
 	e.addComplex(k, complex128(v), 32)
 }
+
 func (e *prettyConsoleEncoder) AddComplex128(k string, v complex128) {
 	e.addComplex(k, v, 64)
 }
@@ -111,15 +114,20 @@ func (e *prettyConsoleEncoder) AddReflected(key string, value interface{}) error
 		lineEnding: []byte(e.cfg.LineEnding),
 	}
 
-	if reflectedEncoder := e.cfg.NewReflectedEncoder(iw); e != nil {
-		if err := reflectedEncoder.Encode(value); err != nil {
-			return err
+	switch v := value.(type) {
+	case formattedString:
+		iw.Write([]byte(v))
+	default:
+		if reflectedEncoder := e.cfg.NewReflectedEncoder(iw); e != nil {
+			if err := reflectedEncoder.Encode(value); err != nil {
+				return err
+			}
 		}
-	}
-	if l-enc.buf.Len() == 0 {
-		// User-supplied reflectedEncoder is a no-op. Fall back to dd
-		if err := defaultReflectedEncoder(iw).Encode(value); err != nil {
-			return err
+		if l-enc.buf.Len() == 0 {
+			// User-supplied reflectedEncoder is a no-op. Fall back to dd
+			if err := defaultReflectedEncoder(iw).Encode(value); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -213,6 +221,28 @@ func (e *prettyConsoleEncoder) AddString(key, value string) {
 	e.inList = true
 	e.listSep = e._listSepSpace
 }
+
+// FormattedString is similar to zap.String() but it does not escape the
+// printed value. This is useful for users who have formatted strings they want
+// to preserve when they are logged.
+//
+// This is for use with a non-sugared logger. For a wrapper designed for use
+// with a sugar logger, see FormattedStringValue().
+func FormattedString(key string, value string) zap.Field {
+	return zap.Any(key, formattedString(value))
+}
+
+// FormattedStringValue is similar to zap.String() but it does not escape the
+// printed value. This is useful for users who have formatted strings they want
+// to preserve when they are logged.
+//
+// This is for use with a sugared logger. For a wrapper designed for use with a
+// non-sugar logger, see FormattedStringValue().
+func FormattedStringValue(value string) formattedString {
+	return formattedString(value)
+}
+
+type formattedString string
 
 // addIndentedString appends a string, replacing any newlines with the
 // current indent.
