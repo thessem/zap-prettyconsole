@@ -123,28 +123,28 @@ Log a message and 10 fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 1459 ns/op | +0% | 5 allocs/op
-| :zap: zap (sugared) | 1966 ns/op | +35% | 10 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 4681 ns/op | +221% | 12 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 5458 ns/op | +274% | 17 allocs/op
+| :zap: zap | 526 ns/op | +0% | 5 allocs/op
+| :zap: zap (sugared) | 848 ns/op | +61% | 10 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 1872 ns/op | +256% | 12 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 2454 ns/op | +367% | 17 allocs/op
 
 Log a message with a logger that already has 10 fields of context:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 141 ns/op | +0% | 0 allocs/op
-| :zap: zap (sugared) | 180 ns/op | +28% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 4389 ns/op | +3013% | 8 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 4495 ns/op | +3088% | 7 allocs/op
+| :zap: zap | 52 ns/op | +0% | 0 allocs/op
+| :zap: zap (sugared) | 65 ns/op | +25% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 1678 ns/op | +3127% | 7 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 1691 ns/op | +3152% | 8 allocs/op
 
 Log a static string, without any context or `printf`-style templating:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 134 ns/op | +0% | 0 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 143 ns/op | +7% | 0 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 175 ns/op | +31% | 1 allocs/op
-| :zap: zap (sugared) | 180 ns/op | +34% | 1 allocs/op
+| :zap: zap | 38 ns/op | +0% | 0 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 47 ns/op | +24% | 0 allocs/op
+| :zap: zap (sugared) | 60 ns/op | +58% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 60 ns/op | +58% | 1 allocs/op
 
 Released under the [MIT License](LICENSE.txt)
 
