@@ -18,8 +18,9 @@ import (
 )
 
 func TestEncodeEntry(t *testing.T) {
-	// Remove stacktrace line-numbers from this test file
-	rPath := regexp.MustCompile(`(\/[^\s\\]+)+\.\w+:\d+`)
+	// Remove stacktrace line-numbers from this test file. Remember to manually
+	// test with -trimpath
+	rPath := regexp.MustCompile(`(github|\/|testing|runtime)[\w\.\\\/\-]*:\d+`)
 
 	tests := []struct {
 		desc     string
@@ -228,6 +229,7 @@ func TestEncodeEntry(t *testing.T) {
 				Time:    time.Date(2018, 6, 19, 16, 33, 42, 99, time.UTC),
 				Stack:   zap.Stack("ignored").String,
 			},
+
 			fields: []zapcore.Field{
 				zap.Error(errors.New("something \nwent wrong")),
 				zap.NamedError("stack", pkgerrors.New("an error with a stacktrace has occurred")),
@@ -257,7 +259,7 @@ func TestEncodeEntry(t *testing.T) {
 			expected := rPath.ReplaceAllString(tt.expected, "/<some_file>:<line_number>")
 			if assert.NoError(t, err, "Unexpected encoding error.") {
 				got := rPath.ReplaceAllString(buf.String(), "/<some_file>:<line_number>")
-				assert.Equalf(t, expected, got, "Incorrect encoded entry, recieved: \n%v", got)
+				assert.Equalf(t, expected, got, "Incorrect encoded entry, received: \n%v", got)
 			}
 		})
 	}

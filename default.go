@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime/debug"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Code-Hex/dd"
@@ -86,10 +88,21 @@ func defaultLevelEncoder(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 }
 
 func defaultCallerEncoder(caller zapcore.EntryCaller, enc zapcore.PrimitiveArrayEncoder) {
+	callerFullPath := caller.FullPath()
+
 	var str string
 	if cwd, err := os.Getwd(); err == nil {
-		if rel, _ := filepath.Rel(cwd, caller.FullPath()); err == nil {
+		if rel, err := filepath.Rel(cwd, callerFullPath); err == nil {
 			str = rel
+		}
+	}
+	if str == "" {
+		// May have been built with -trimpath which will cause paths to be
+		// package paths instead of file paths try trimming the main module
+		// path else this will fall back to the full path
+		str = callerFullPath
+		if buildInfo, ok := debug.ReadBuildInfo(); ok {
+			str = strings.TrimPrefix(str, buildInfo.Main.Path+"/")
 		}
 	}
 
