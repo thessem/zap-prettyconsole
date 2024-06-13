@@ -3,7 +3,6 @@ package prettyconsole
 import (
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -55,24 +54,9 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 		e.listSep = e.cfg.LineEnding + strings.Repeat(" ", e.namespaceIndent)
 	}()
 
-	basic := err.Error()
-	enc.addSafeString(basic)
-
-	// Write causes recursively
-	skipDetail := false
-	switch et := err.(type) {
-	case interface{ Cause() error }:
-		if err := enc.encodeError("cause", et.Cause()); err != nil {
-			return err
-		}
-		skipDetail = true
-	case interface{ Errors() []error }:
-		for i, ei := range et.Errors() {
-			if err := enc.encodeError("cause."+strconv.Itoa(i), ei); err != nil {
-				return err
-			}
-			skipDetail = true
-		}
+	skipDetail, retErr := writeError(enc, err)
+	if retErr != nil {
+		return retErr
 	}
 
 	// If there's a stacktrace, print it. If this error is a formatter, we'll
