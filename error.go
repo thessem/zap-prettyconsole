@@ -3,11 +3,14 @@ package prettyconsole
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
 )
+
+var reErrorJoins = regexp.MustCompile(`[\s,:;\\n]+$`)
 
 // Encodes the given error into fields of an object. A field with the given
 // name is added for the error message.
@@ -30,10 +33,6 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 	enc := e.clone()
 	enc.OpenNamespace(key)
 
-	enc.colorizeAtLevel("=")
-	enc.namespaceIndent += 1
-	enc.inList = true
-
 	// Try to capture panics (from nil references or otherwise) when calling
 	// the Error() method
 	defer func() {
@@ -55,24 +54,47 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 		e.listSep = e.cfg.LineEnding + strings.Repeat(" ", e.namespaceIndent)
 	}()
 
+	var causes []error
+	switch et := err.(type) {
+	case interface{ Errors() []error }:
+		causes = et.Errors()
+	case interface{ Unwrap() []error }:
+		causes = et.Unwrap()
+	case interface{ Cause() error }:
+		causes = []error{et.Cause()}
+	case interface{ Unwrap() error }:
+		causes = []error{et.Unwrap()}
+	}
+
 	basic := err.Error()
-	enc.addSafeString(basic)
+	for _, cause := range causes {
+		if cause != nil {
+			cbasic := cause.Error()
+			basic, _, _ = strings.Cut(basic, cbasic)
+			// TrimSuffix with seperator characters like : or , surrounded by
+			// any number of spaces
+			basic = reErrorJoins.ReplaceAllString(strings.TrimSpace(basic), "")
+		}
+	}
+	if basic != "" {
+		enc.namespaceIndent += 1
+		enc.colorizeAtLevel("=")
+		enc.inList = true
+		enc.addSafeString(basic)
+	}
 
 	// Write causes recursively
 	skipDetail := false
-	switch et := err.(type) {
-	case interface{ Cause() error }:
-		if err := enc.encodeError("cause", et.Cause()); err != nil {
+	for i, ei := range causes {
+		if len(causes) > 1 {
+			key = "cause." + strconv.Itoa(i)
+		} else {
+			key = "cause"
+		}
+		if err := enc.encodeError(key, ei); err != nil {
 			return err
 		}
 		skipDetail = true
-	case interface{ Errors() []error }:
-		for i, ei := range et.Errors() {
-			if err := enc.encodeError("cause."+strconv.Itoa(i), ei); err != nil {
-				return err
-			}
-			skipDetail = true
-		}
 	}
 
 	// If there's a stacktrace, print it. If this error is a formatter, we'll
