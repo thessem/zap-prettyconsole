@@ -61,9 +61,15 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 	case interface{ Unwrap() []error }:
 		causes = et.Unwrap()
 	case interface{ Cause() error }:
-		causes = []error{et.Cause()}
+	  cause := et.Cause()
+	  if cause != nil {
+	    causes = []error{cause}
+	  }
 	case interface{ Unwrap() error }:
-		causes = []error{et.Unwrap()}
+	  cause := et.Unwrap()
+	  if cause != nil {
+	    causes = []error{cause}
+	  }
 	}
 
 	basic := err.Error()
