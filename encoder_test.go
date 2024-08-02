@@ -272,11 +272,12 @@ func TestEncodeEntry(t *testing.T) {
 			//          .cause.0.cause.0=joined 1
 			//                  .cause.1=joined 2
 			//          .cause.1=fmt error
+			//  ↳ nil_cause_error=Error has nil cause
 			//  ↳ stacktrace=github.com/thessem/zap-prettyconsole.TestEncodeEntry
 			//                       /<some_file>:<line_number>
 			//               testing.tRunner
 			//                       /<some_file>:<line_number>
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[31m \x1b[0m\x1b[31mERR\x1b[0m\x1b[31m \x1b[0m\x1b[1m\x1b[31m>\x1b[0m\x1b[0m\x1b[31m \x1b[0mtest message\n\x1b[31m  ↳ error\x1b[0m\x1b[31m=\x1b[0merror with context\n          \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0mcause 1\n\x1b[31m  ↳ error\x1b[0m\x1b[31m=\x1b[0merrors with context\n          \x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mcause 1\n          \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mcause 2\n\x1b[31m  ↳ error\x1b[0m\x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mjoined cause 1\n         \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mjoined cause 2\n\x1b[31m  ↳ error\x1b[0m\x1b[31m=\x1b[0mJoined and fmt\n          \x1b[31m.cause.0\x1b[0m\x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mjoined 1\n                  \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mjoined 2\n          \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mfmt error\n\x1b[31m  ↳ \x1b[0m\x1b[31mstacktrace=\x1b[0mgithub.com/thessem/zap-prettyconsole.TestEncodeEntry\n               \t/<some_file>:<line_number>\n               testing.tRunner\n               \t/<some_file>:<line_number>\n",
+			expected: "\x1b[90m4:33PM\x1b[0m\x1b[31m \x1b[0m\x1b[31mERR\x1b[0m\x1b[31m \x1b[0m\x1b[1m\x1b[31m>\x1b[0m\x1b[0m\x1b[31m \x1b[0mtest message\n\x1b[31m  ↳ error\x1b[0m\x1b[31m=\x1b[0merror with context\n          \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0mcause 1\n\x1b[31m  ↳ error\x1b[0m\x1b[31m=\x1b[0merrors with context\n          \x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mcause 1\n          \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mcause 2\n\x1b[31m  ↳ error\x1b[0m\x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mjoined cause 1\n         \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mjoined cause 2\n\x1b[31m  ↳ error\x1b[0m\x1b[31m=\x1b[0mJoined and fmt\n          \x1b[31m.cause.0\x1b[0m\x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mjoined 1\n                  \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mjoined 2\n          \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mfmt error\n\x1b[31m  ↳ nil_cause_error\x1b[0m\x1b[31m=\x1b[0mError has nil cause\n\x1b[31m  ↳ \x1b[0m\x1b[31mstacktrace=\x1b[0mgithub.com/thessem/zap-prettyconsole.TestEncodeEntry\n               \t/<some_file>:<line_number>\n               testing.tRunner\n               \t/<some_file>:<line_number>\n",
 			ent: zapcore.Entry{
 				Level:   zapcore.ErrorLevel,
 				Message: "test message",
@@ -289,6 +290,8 @@ func TestEncodeEntry(t *testing.T) {
 				zap.Error(fmt.Errorf("errors with context: %w, %w", errors.New("cause 1"), errors.New("cause 2"))),
 				zap.Error(errors.Join(errors.New("joined cause 1"), errors.New("joined cause 2"))),
 				zap.Error(fmt.Errorf("Joined and fmt: %w and %w", errors.Join(fmt.Errorf("joined 1"), fmt.Errorf("joined 2")), fmt.Errorf("fmt error"))),
+				zap.NamedError("nil_cause_error", nilCauseError{}),
+				zap.NamedError("nill_error", nil),
 			},
 		},
 	}
@@ -343,6 +346,16 @@ func (t *testPanicError) Error() string {
 	} else {
 		panic(*t)
 	}
+}
+
+type nilCauseError struct{}
+
+func (nilCauseError) Error() string {
+	return "Error has nil cause"
+}
+
+func (nilCauseError) Cause() error {
+	return nil
 }
 
 type testArray []interface{}

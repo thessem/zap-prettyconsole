@@ -86,6 +86,9 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 	// Write causes recursively
 	skipDetail := false
 	for i, ei := range causes {
+		if ei == nil {
+			continue
+		}
 		if len(causes) > 1 {
 			key = "cause." + strconv.Itoa(i)
 		} else {
