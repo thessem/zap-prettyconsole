@@ -1,0 +1,23 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - github-actions/main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          release-type: go
+          token: ${{ secrets.RELEASE_PLEASE_GITHUB_TOKEN }}
+          target-branch: ${{ github.ref_name }}
+          config-file: .github/workflows/release-please-config.json
+          manifest-file: .github/workflows/.release-please-manifest.json
