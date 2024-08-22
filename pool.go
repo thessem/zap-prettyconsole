@@ -21,10 +21,6 @@ func getRecordingEncoder() *recordingEncoder {
 	return _recorderPool.Get().(*recordingEncoder)
 }
 
-func putRecordingEncoder() *recordingEncoder {
-	return _recorderPool.Get().(*recordingEncoder)
-}
-
 func getPrettyConsoleEncoder() *prettyConsoleEncoder {
 	return _prettyConsolePool.Get().(*prettyConsoleEncoder)
 }

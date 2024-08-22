@@ -264,7 +264,7 @@ func (e *prettyConsoleEncoder) appendSafeByte(s []byte) {
 			i++
 			continue
 		}
-		e.buf.Write(s[i : i+size])
+		_, _ = e.buf.Write(s[i : i+size]) // Explicitly ignore errors
 		i += size
 	}
 }
