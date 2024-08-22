@@ -1,5 +1,5 @@
 {
   "go.formatTool": "gofumpt",
   "go.lintTool": "golangci-lint",
-  "go.lintFlags": ["--fast"]
+  "go.lintFlags": ["-c", ".golangci.toml", "--fast"]
 }

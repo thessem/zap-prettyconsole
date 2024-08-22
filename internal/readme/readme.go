@@ -14,14 +14,12 @@ import (
 	"time"
 )
 
-var (
-	libraryNameToMarkdownName = map[string]string{
-		"Zap":              ":zap: zap",
-		"Zap.Sugar":        ":zap: zap (sugared)",
-		"Zap.Pretty":       ":zap: :nail_care: zap-prettyconsole",
-		"Zap.Pretty.Sugar": ":zap: :nail_care: zap-prettyconsole (sugared)",
-	}
-)
+var libraryNameToMarkdownName = map[string]string{
+	"Zap":              ":zap: zap",
+	"Zap.Sugar":        ":zap: zap (sugared)",
+	"Zap.Pretty":       ":zap: :nail_care: zap-prettyconsole",
+	"Zap.Pretty.Sugar": ":zap: :nail_care: zap-prettyconsole (sugared)",
+}
 
 func main() {
 	flag.Parse()
