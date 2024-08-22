@@ -94,9 +94,7 @@ func (e *prettyConsoleEncoder) AppendUint64(u uint64) {
 func (e *prettyConsoleEncoder) AppendDuration(duration time.Duration) {
 	e.addSeparator()
 	cur := e.buf.Len()
-	if durationEncoder := e.cfg.EncodeDuration; e != nil {
-		durationEncoder(duration, e)
-	}
+	e.cfg.EncodeDuration(duration, e)
 	if cur == e.buf.Len() {
 		// User-supplied EncodeDuration is a no-op. Fall back to nanoseconds to keep
 		// JSON valid.
@@ -110,9 +108,7 @@ func (e *prettyConsoleEncoder) AppendDuration(duration time.Duration) {
 func (e *prettyConsoleEncoder) AppendTime(t time.Time) {
 	e.addSeparator()
 	cur := e.buf.Len()
-	if timeEncoder := e.cfg.EncodeTime; e != nil {
-		timeEncoder(t, e)
-	}
+	e.cfg.EncodeTime(t, e)
 	if cur == e.buf.Len() {
 		// User-supplied EncodeTime is a no-op. Fall back to RFC3339
 		e.buf.AppendTime(t, time.RFC3339)
@@ -189,11 +185,8 @@ func (e *prettyConsoleEncoder) AppendReflected(value interface{}) error {
 		indent:     enc.namespaceIndent,
 		lineEnding: []byte(e.cfg.LineEnding),
 	}
-
-	if reflectedEncoder := e.cfg.NewReflectedEncoder(iw); e != nil {
-		if err := reflectedEncoder.Encode(value); err != nil {
-			return err
-		}
+	if err := e.cfg.NewReflectedEncoder(iw).Encode(value); err != nil {
+		return err
 	}
 	if l-enc.buf.Len() == 0 {
 		// User-supplied reflectedEncoder is a no-op. Fall back to dd
