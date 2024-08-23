@@ -47,7 +47,7 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 			}
 			enc.addSafeString("<nil>")
 		}
-		e.buf.Write(enc.buf.Bytes())
+		_, _ = e.buf.Write(enc.buf.Bytes()) // Explicitly ignore errors
 		putPrettyConsoleEncoder(enc)
 
 		e.inList = true

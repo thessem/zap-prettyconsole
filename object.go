@@ -116,12 +116,12 @@ func (e *prettyConsoleEncoder) AddReflected(key string, value interface{}) error
 
 	switch v := value.(type) {
 	case formattedString:
-		iw.Write([]byte(v))
+		if _, err := iw.Write([]byte(v)); err != nil {
+			return err
+		}
 	default:
-		if reflectedEncoder := e.cfg.NewReflectedEncoder(iw); e != nil {
-			if err := reflectedEncoder.Encode(value); err != nil {
-				return err
-			}
+		if err := e.cfg.NewReflectedEncoder(iw).Encode(value); err != nil {
+			return err
 		}
 		if l-enc.buf.Len() == 0 {
 			// User-supplied reflectedEncoder is a no-op. Fall back to dd
@@ -183,9 +183,7 @@ func (e *prettyConsoleEncoder) AddDuration(key string, value time.Duration) {
 	cur := e.buf.Len()
 	// Both of these append, and we're at the first element of the sublist
 	e.inList = false
-	if durationEncoder := e.cfg.EncodeDuration; e != nil {
-		durationEncoder(value, e)
-	}
+	e.cfg.EncodeDuration(value, e)
 	if cur == e.buf.Len() {
 		// User-supplied EncodeDuration is a no-op. Fall back to Go format
 		e.buf.AppendString(value.String())
