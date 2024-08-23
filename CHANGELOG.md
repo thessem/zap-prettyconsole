@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.5.2](https://github.com/thessem/zap-prettyconsole/compare/v0.5.1...v0.5.2) (2024-08-23)
+
+
+### Bug Fixes
+
+* Fix issues identified by golangci-lint ([#16](https://github.com/thessem/zap-prettyconsole/issues/16)) ([9d655f8](https://github.com/thessem/zap-prettyconsole/commit/9d655f861333e9683a2a0bd054eef974f8636d0e))
+
+
+### Documentation
+
+* Add changelog for previous versions ([#18](https://github.com/thessem/zap-prettyconsole/issues/18)) ([e5019c1](https://github.com/thessem/zap-prettyconsole/commit/e5019c11671ae5c94cafdbf0209444e18da57f94))
+
+
+### Miscellaneous Chores
+
+* Delete IntelliJ project config ([#15](https://github.com/thessem/zap-prettyconsole/issues/15)) ([c30df76](https://github.com/thessem/zap-prettyconsole/commit/c30df76e2713b7472c3ed98138421a1fb0c89213))
+
+
+### Continuous Integration
+
+* Add basic GitHub actions configuration for release ([#12](https://github.com/thessem/zap-prettyconsole/issues/12)) ([e571c45](https://github.com/thessem/zap-prettyconsole/commit/e571c45dd3baa0b13ce04285f46a023d2db04655))
+* Add Golangci-lint GitHub action ([#19](https://github.com/thessem/zap-prettyconsole/issues/19)) ([592ac55](https://github.com/thessem/zap-prettyconsole/commit/592ac554c5f618b05b326b84276d589c85c85a95))
+* Add golangci-lint, flake.nix to run it and VSCode config for it ([#17](https://github.com/thessem/zap-prettyconsole/issues/17)) ([921f5b6](https://github.com/thessem/zap-prettyconsole/commit/921f5b63a3ef14e4b70d776cc2232d74eede5b0e))
+* Add tests and benchmarks to CI ([#14](https://github.com/thessem/zap-prettyconsole/issues/14)) ([00985c8](https://github.com/thessem/zap-prettyconsole/commit/00985c88d19ba66a3eee21a199efb8cebfb34b7b))
+
 ## [0.5.1](https://github.com/thessem/zap-prettyconsole/compare/v0.5.0...v0.5.1) (2024-06-14)
 
 - **fix:** Avoid panics when Unwrap/Cause return nil errors ([1455806](https://github.com/thessem/zap-prettyconsole/commit/1455806e09aae5319ce8072477d4d2a4e5865730))
