@@ -143,28 +143,28 @@ Log a message and 10 fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 570 ns/op | +0% | 5 allocs/op
-| :zap: zap (sugared) | 861 ns/op | +51% | 10 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 2050 ns/op | +260% | 11 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 2484 ns/op | +336% | 16 allocs/op
+| :zap: zap | 562 ns/op | +0% | 5 allocs/op
+| :zap: zap (sugared) | 877 ns/op | +56% | 10 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 1948 ns/op | +247% | 11 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 2441 ns/op | +334% | 16 allocs/op
 
 Log a message with a logger that already has 10 fields of context:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 57 ns/op | +0% | 0 allocs/op
-| :zap: zap (sugared) | 67 ns/op | +18% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 1705 ns/op | +2891% | 6 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 1712 ns/op | +2904% | 7 allocs/op
+| :zap: zap | 48 ns/op | +0% | 0 allocs/op
+| :zap: zap (sugared) | 66 ns/op | +38% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 1627 ns/op | +3290% | 6 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 1646 ns/op | +3329% | 7 allocs/op
 
 Log a static string, without any context or `printf`-style templating:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: :nail_care: zap-prettyconsole | 39 ns/op | -11% | 0 allocs/op
-| :zap: zap | 44 ns/op | +0% | 0 allocs/op
-| :zap: zap (sugared) | 60 ns/op | +36% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 62 ns/op | +41% | 1 allocs/op
+| :zap: zap | 51 ns/op | +0% | 0 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 54 ns/op | +6% | 0 allocs/op
+| :zap: zap (sugared) | 62 ns/op | +22% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 62 ns/op | +22% | 1 allocs/op
 
 Released under the [MIT License](LICENSE.txt)
 
