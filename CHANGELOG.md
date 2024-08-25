@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.3](https://github.com/thessem/zap-prettyconsole/compare/v0.5.2...v0.5.3) (2024-08-25)
+
+
+### Documentation
+
+* Fix example code in Readme to match generated image ([#22](https://github.com/thessem/zap-prettyconsole/issues/22)) ([06d0bbd](https://github.com/thessem/zap-prettyconsole/commit/06d0bbd46f755e9bdfc7461d120940db5f48a159))
+* Fix object example in readme ([#20](https://github.com/thessem/zap-prettyconsole/issues/20)) ([44b8f84](https://github.com/thessem/zap-prettyconsole/commit/44b8f84736276086a799161b337f36283170d420))
+
 ## [0.5.2](https://github.com/thessem/zap-prettyconsole/compare/v0.5.1...v0.5.2) (2024-08-23)
 
 
