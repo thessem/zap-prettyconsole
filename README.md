@@ -62,12 +62,12 @@ type UserAddress struct {
 func (u *User) MarshalLogObject(e zapcore.ObjectEncoder) error {
 	e.AddString("name", u.Name)
 	e.AddInt("age", u.Age)
-	e.OpenNamespace("address")
-	e.AddString("street", u.Address.Street)
-	e.AddString("city", u.Address.City)
 	if u.Friend != nil {
 		_ = e.AddObject("friend", u.Friend)
 	}
+	e.OpenNamespace("address")
+	e.AddString("street", u.Address.Street)
+	e.AddString("city", u.Address.City)
 	return nil
 }
 
