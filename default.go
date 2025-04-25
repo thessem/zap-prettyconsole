@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Code-Hex/dd"
+	"github.com/Code-Hex/dd/df"
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 )
@@ -141,10 +142,11 @@ var reflectedListBreakSize = map[interface{}]int{
 }
 
 func defaultReflectedEncoder(w io.Writer) zapcore.ReflectedEncoder {
-	opts := make([]dd.OptionFunc, 0, len(reflectedListBreakSize))
+	opts := make([]dd.OptionFunc, 0, len(reflectedListBreakSize)+1)
 	for key, val := range reflectedListBreakSize {
 		opts = append(opts, dd.WithListBreakLineSize(key, val))
 	}
+	opts = append(opts, df.WithTime(time.RFC3339))
 	return ddEncoder{w: w, opts: opts}
 }
 
