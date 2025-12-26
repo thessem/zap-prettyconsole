@@ -20,5 +20,17 @@ jobs:
           go-version: ${{ matrix.go-version }}
       - name: Test
         run: make test
+      - name: Test with Coverage
+        run: |
+          go test -race -coverprofile=coverage.out -covermode=atomic ./...
+          go tool cover -func=coverage.out
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+          flags: go-${{ matrix.go-version }}
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       - name: Benchmark
         run: make bench

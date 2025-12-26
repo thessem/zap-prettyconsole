@@ -1,5 +1,9 @@
 # :zap: :nail_care: zap-prettyconsole - Pretty Console Output For Zap
 
+[![Go Test](https://github.com/thessem/zap-prettyconsole/actions/workflows/test.yml/badge.svg)](https://github.com/thessem/zap-prettyconsole/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/thessem/zap-prettyconsole/branch/main/graph/badge.svg)](https://codecov.io/gh/thessem/zap-prettyconsole)
+[![Go Report Card](https://goreportcard.com/badge/github.com/thessem/zap-prettyconsole)](https://goreportcard.com/report/github.com/thessem/zap-prettyconsole)
+
 An encoder for Uber's [zap] logger that makes complex structured log output easily readable by humans.
 It prioritises displaying information in a clean and easy-to-understand way.
 
@@ -143,28 +147,28 @@ Log a message and 10 fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 562 ns/op | +0% | 5 allocs/op
-| :zap: zap (sugared) | 877 ns/op | +56% | 10 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 1948 ns/op | +247% | 11 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 2441 ns/op | +334% | 16 allocs/op
+| :zap: zap | 960 ns/op | +0% | 5 allocs/op
+| :zap: zap (sugared) | 1352 ns/op | +41% | 10 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 3316 ns/op | +245% | 11 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 3781 ns/op | +294% | 16 allocs/op
 
 Log a message with a logger that already has 10 fields of context:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 48 ns/op | +0% | 0 allocs/op
-| :zap: zap (sugared) | 66 ns/op | +38% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 1627 ns/op | +3290% | 6 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 1646 ns/op | +3329% | 7 allocs/op
+| :zap: zap | 85 ns/op | +0% | 0 allocs/op
+| :zap: zap (sugared) | 106 ns/op | +25% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 3121 ns/op | +3572% | 6 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 3196 ns/op | +3660% | 7 allocs/op
 
 Log a static string, without any context or `printf`-style templating:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 51 ns/op | +0% | 0 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 54 ns/op | +6% | 0 allocs/op
-| :zap: zap (sugared) | 62 ns/op | +22% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 62 ns/op | +22% | 1 allocs/op
+| :zap: zap | 81 ns/op | +0% | 0 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 83 ns/op | +2% | 0 allocs/op
+| :zap: zap (sugared) | 99 ns/op | +22% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 107 ns/op | +32% | 1 allocs/op
 
 Released under the [MIT License](LICENSE.txt)
 

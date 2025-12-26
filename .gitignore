@@ -1,0 +1,7 @@
+# Test artifacts
+coverage.out
+cpu.pprof
+mem.pprof
+
+# Generated files
+internal/readme/images/
