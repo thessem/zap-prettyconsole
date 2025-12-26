@@ -915,3 +915,132 @@ func TestArrayTypeConversions(t *testing.T) {
 		})
 	}
 }
+
+func TestReflectedTimeFormatting(t *testing.T) {
+	// Create a struct with time.Time field
+	type TestStruct struct {
+		Timestamp time.Time
+		Message   string
+	}
+
+	testTime := time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC)
+	testData := TestStruct{
+		Timestamp: testTime,
+		Message:   "test",
+	}
+
+	enc := NewEncoder(NewEncoderConfig())
+	ent := zapcore.Entry{
+		Level:   zapcore.InfoLevel,
+		Message: "reflected time test",
+		Time:    time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC),
+	}
+
+	buf, err := enc.EncodeEntry(ent, []zapcore.Field{
+		zap.Reflect("data", testData),
+	})
+
+	assert.NoError(t, err)
+
+	output := buf.String()
+
+	// Verify RFC3339 format appears in output
+	// Expected: 2024-01-15T14:30:45Z
+	assert.Contains(t, output, "2024-01-15T14:30:45Z",
+		"Timestamp should be formatted in RFC3339 format")
+	// Ensure not using Go's internal time format with wall clock
+	assert.NotContains(t, output, "wall=",
+		"Should not use Go's internal time format")
+}
+
+func TestReflectedByteSliceFormatting(t *testing.T) {
+	// Test that WithRichBytes() provides hex dump format for byte slices
+	type DataWithBytes struct {
+		TraceID []byte
+		SpanID  []byte
+	}
+
+	// Create test data with known byte patterns
+	data := DataWithBytes{
+		TraceID: []byte{
+			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+			0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+		},
+		SpanID: []byte{0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6, 0x07, 0x18},
+	}
+
+	enc := NewEncoder(NewEncoderConfig())
+	ent := zapcore.Entry{
+		Level:   zapcore.InfoLevel,
+		Message: "byte slice test",
+		Time:    time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC),
+	}
+
+	buf, err := enc.EncodeEntry(ent, []zapcore.Field{
+		zap.Reflect("data", data),
+	})
+
+	assert.NoError(t, err)
+
+	output := buf.String()
+
+	// WithRichBytes provides hexdump-style output for []byte
+	// Should see hex bytes like "00 01 02 03 04 05 06 07"
+	assert.Contains(t, output, "00 01 02 03 04 05 06 07",
+		"TraceID should show hex dump format")
+	assert.Contains(t, output, "a1 b2 c3 d4 e5 f6 07 18",
+		"SpanID should show hex dump format")
+
+	// Should include hexdump-style comment format
+	assert.Contains(t, output, "// 00000000",
+		"Should include hexdump address prefix")
+}
+
+func TestByteSliceEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    interface{}
+		contains string
+	}{
+		{
+			name:     "Empty byte slice",
+			input:    struct{ Data []byte }{Data: []byte{}},
+			contains: "Data:", // Should handle empty slices gracefully
+		},
+		{
+			name:     "Single byte",
+			input:    struct{ Value []byte }{Value: []byte{0xff}},
+			contains: "ff",
+		},
+		{
+			name: "Nested struct with byte slices",
+			input: struct {
+				Outer struct {
+					Inner []byte
+				}
+			}{
+				Outer: struct{ Inner []byte }{
+					Inner: []byte{0xde, 0xad, 0xbe, 0xef},
+				},
+			},
+			contains: "de ad be ef",
+		},
+	}
+
+	enc := NewEncoder(NewEncoderConfig())
+	ent := zapcore.Entry{
+		Level:   zapcore.InfoLevel,
+		Message: "edge case test",
+		Time:    time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC),
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf, err := enc.EncodeEntry(ent, []zapcore.Field{
+				zap.Reflect("data", tt.input),
+			})
+			assert.NoError(t, err)
+			assert.Contains(t, buf.String(), tt.contains)
+		})
+	}
+}
