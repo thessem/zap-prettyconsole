@@ -142,11 +142,12 @@ var reflectedListBreakSize = map[interface{}]int{
 }
 
 func defaultReflectedEncoder(w io.Writer) zapcore.ReflectedEncoder {
-	opts := make([]dd.OptionFunc, 0, len(reflectedListBreakSize)+1)
+	opts := make([]dd.OptionFunc, 0, len(reflectedListBreakSize)+2)
 	for key, val := range reflectedListBreakSize {
 		opts = append(opts, dd.WithListBreakLineSize(key, val))
 	}
 	opts = append(opts, df.WithTime(time.RFC3339))
+	opts = append(opts, df.WithRichBytes())
 	return ddEncoder{w: w, opts: opts}
 }
 
