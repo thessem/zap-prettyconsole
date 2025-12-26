@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.6.0](https://github.com/thessem/zap-prettyconsole/compare/v0.5.2...v0.6.0) (2025-12-26)
+
+
+### Features
+
+* Add df.WithRichBytes() for improved byte slice formatting ([#27](https://github.com/thessem/zap-prettyconsole/issues/27)) ([6b1b241](https://github.com/thessem/zap-prettyconsole/commit/6b1b2412ee05725fbdd5d2824d3080da0b4c7e81))
+* Fix unnecessarily long time logs with dd ([#25](https://github.com/thessem/zap-prettyconsole/issues/25)) ([019fff7](https://github.com/thessem/zap-prettyconsole/commit/019fff7a92de8c50d109050b5aadcfb4578c96f2))
+* Print common fixed sized by arrays as hex through dd ([#28](https://github.com/thessem/zap-prettyconsole/issues/28)) ([2092019](https://github.com/thessem/zap-prettyconsole/commit/2092019f58852ba6d07ba96f3a70dcae932dae21))
+
+
+### Documentation
+
+* Fix example code in Readme to match generated image ([#22](https://github.com/thessem/zap-prettyconsole/issues/22)) ([06d0bbd](https://github.com/thessem/zap-prettyconsole/commit/06d0bbd46f755e9bdfc7461d120940db5f48a159))
+* Fix object example in readme ([#20](https://github.com/thessem/zap-prettyconsole/issues/20)) ([44b8f84](https://github.com/thessem/zap-prettyconsole/commit/44b8f84736276086a799161b337f36283170d420))
+
+
+### Miscellaneous Chores
+
+* Improve Makefile targets and test coverage  ([#26](https://github.com/thessem/zap-prettyconsole/issues/26)) ([1ef67a8](https://github.com/thessem/zap-prettyconsole/commit/1ef67a8dae4abf0d1e2286f79e3c1ee83b2e11bb))
+
 ## [0.5.2](https://github.com/thessem/zap-prettyconsole/compare/v0.5.1...v0.5.2) (2024-08-23)
 
 
