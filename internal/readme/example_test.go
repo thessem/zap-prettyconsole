@@ -156,3 +156,31 @@ func TestErrors(t *testing.T) {
 			zap.Error(err),
 		)
 }
+
+// TraceContext simulates an OpenTelemetry trace context with byte array fields
+type TraceContext struct {
+	TraceID [16]byte // 128-bit trace ID
+	SpanID  [8]byte  // 64-bit span ID
+	Flags   byte     // Trace flags
+}
+
+func TestOTelTracing(t *testing.T) {
+	logger := prettyconsole.NewLogger(zap.DebugLevel)
+	sugar := logger.Sugar()
+
+	// Simulate an OpenTelemetry trace context
+	traceCtx := TraceContext{
+		TraceID: [16]byte{
+			0x4b, 0xf9, 0x2f, 0x35, 0x77, 0xb3, 0x4d, 0xa6,
+			0xa3, 0xce, 0x92, 0x9d, 0x0e, 0x0e, 0x47, 0x21,
+		},
+		SpanID: [8]byte{0x00, 0xf0, 0x67, 0xaa, 0x0b, 0xa9, 0x02, 0xb7},
+		Flags:  1,
+	}
+
+	sugar.Infow("Processing request with trace context",
+		"method", "GET",
+		"path", "/api/users",
+		"trace", traceCtx,
+	)
+}
