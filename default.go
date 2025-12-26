@@ -141,13 +141,63 @@ var reflectedListBreakSize = map[interface{}]int{
 	new(uint16): 16, *new(uint16): 16,
 }
 
+// formatByteArrayAsHex converts a byte slice to a lowercase hex string with quotes.
+// Used for formatting fixed-size byte arrays as compact hex strings.
+func formatByteArrayAsHex(bytes []byte) string {
+	var hexStr strings.Builder
+	hexStr.WriteString("\"")
+	for _, b := range bytes {
+		// Format each byte as 2-character hex with leading zero if needed
+		if b < 16 {
+			hexStr.WriteByte('0')
+		}
+		hexStr.WriteString(strconv.FormatUint(uint64(b), 16))
+	}
+	hexStr.WriteString("\"")
+	return hexStr.String()
+}
+
 func defaultReflectedEncoder(w io.Writer) zapcore.ReflectedEncoder {
-	opts := make([]dd.OptionFunc, 0, len(reflectedListBreakSize)+2)
+	opts := make([]dd.OptionFunc, 0, len(reflectedListBreakSize)+7)
 	for key, val := range reflectedListBreakSize {
 		opts = append(opts, dd.WithListBreakLineSize(key, val))
 	}
 	opts = append(opts, df.WithTime(time.RFC3339))
 	opts = append(opts, df.WithRichBytes())
+
+	// Add custom formatters for fixed-size byte arrays
+	// Note: Due to Go's type system, each [N]byte is a distinct type, so we need
+	// separate WithDumpFunc calls for each size. We cannot create a single generic
+	// formatter for "any byte array of any size" because:
+	// - Go generics don't support array size as a type parameter
+	// - WithDumpFunc uses reflect.TypeOf(v) to register formatters by exact type
+	// The sizes below cover the most common use cases:
+
+	// [4]byte - CRC32 checksums, IPv4 addresses
+	opts = append(opts, dd.WithDumpFunc(func(v [4]byte, w dd.Writer) {
+		w.Write(formatByteArrayAsHex(v[:]))
+	}))
+
+	// [8]byte - OpenTelemetry SpanID, uint64 as bytes
+	opts = append(opts, dd.WithDumpFunc(func(v [8]byte, w dd.Writer) {
+		w.Write(formatByteArrayAsHex(v[:]))
+	}))
+
+	// [16]byte - OpenTelemetry TraceID, UUID, MD5 hashes
+	opts = append(opts, dd.WithDumpFunc(func(v [16]byte, w dd.Writer) {
+		w.Write(formatByteArrayAsHex(v[:]))
+	}))
+
+	// [32]byte - SHA256 hashes, Ed25519 public keys
+	opts = append(opts, dd.WithDumpFunc(func(v [32]byte, w dd.Writer) {
+		w.Write(formatByteArrayAsHex(v[:]))
+	}))
+
+	// [64]byte - SHA512 hashes, Ed25519 signatures
+	opts = append(opts, dd.WithDumpFunc(func(v [64]byte, w dd.Writer) {
+		w.Write(formatByteArrayAsHex(v[:]))
+	}))
+
 	return ddEncoder{w: w, opts: opts}
 }
 

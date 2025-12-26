@@ -111,6 +111,11 @@ I am a big fan of error wrapping and error stacktraces, I am not a fan of needin
 When objects that do not satisfy `ObjectMarshaler` are logged, zap-prettyconsole will use reflection (via the delightful [dd][dd] library) to print it instead:
 ![reflection](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/Reflection.png?raw=true)
 
+Fixed-size byte arrays (like `[16]byte` and `[8]byte`) are automatically formatted as compact hex strings, making them ideal for displaying OpenTelemetry trace IDs, span IDs, and other binary identifiers:
+![otel_tracing](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/OTelTracing.png?raw=true)
+
+Supported byte array sizes include `[4]byte`, `[8]byte`, `[16]byte`, `[32]byte`, and `[64]byte` - covering common use cases like IPv4 addresses, UUIDs, trace IDs, and cryptographic hashes (MD5, SHA256, SHA512).
+
 Strings passed to the logger will have their formatting printed and colourised, but you can opt out of this and print the raw strings.
 
 ![formatting](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/Formatting.png?raw=true)

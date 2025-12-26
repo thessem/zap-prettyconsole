@@ -111,6 +111,11 @@ I am a big fan of error wrapping and error stacktraces, I am not a fan of needin
 When objects that do not satisfy `ObjectMarshaler` are logged, zap-prettyconsole will use reflection (via the delightful [dd][dd] library) to print it instead:
 ![reflection](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/Reflection.png?raw=true)
 
+Fixed-size byte arrays (like `[16]byte` and `[8]byte`) are automatically formatted as compact hex strings, making them ideal for displaying OpenTelemetry trace IDs, span IDs, and other binary identifiers:
+![otel_tracing](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/OTelTracing.png?raw=true)
+
+Supported byte array sizes include `[4]byte`, `[8]byte`, `[16]byte`, `[32]byte`, and `[64]byte` - covering common use cases like IPv4 addresses, UUIDs, trace IDs, and cryptographic hashes (MD5, SHA256, SHA512).
+
 Strings passed to the logger will have their formatting printed and colourised, but you can opt out of this and print the raw strings.
 
 ![formatting](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/Formatting.png?raw=true)
@@ -147,28 +152,28 @@ Log a message and 10 fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 960 ns/op | +0% | 5 allocs/op
-| :zap: zap (sugared) | 1352 ns/op | +41% | 10 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 3316 ns/op | +245% | 11 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 3781 ns/op | +294% | 16 allocs/op
+| :zap: zap | 1001 ns/op | +0% | 5 allocs/op
+| :zap: zap (sugared) | 1526 ns/op | +52% | 10 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 3554 ns/op | +255% | 11 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 4988 ns/op | +398% | 16 allocs/op
 
 Log a message with a logger that already has 10 fields of context:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 85 ns/op | +0% | 0 allocs/op
-| :zap: zap (sugared) | 106 ns/op | +25% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 3121 ns/op | +3572% | 6 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 3196 ns/op | +3660% | 7 allocs/op
+| :zap: zap | 90 ns/op | +0% | 0 allocs/op
+| :zap: zap (sugared) | 108 ns/op | +20% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 3261 ns/op | +3523% | 6 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 3465 ns/op | +3750% | 7 allocs/op
 
 Log a static string, without any context or `printf`-style templating:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 81 ns/op | +0% | 0 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 83 ns/op | +2% | 0 allocs/op
-| :zap: zap (sugared) | 99 ns/op | +22% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 107 ns/op | +32% | 1 allocs/op
+| :zap: zap | 83 ns/op | +0% | 0 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 91 ns/op | +10% | 0 allocs/op
+| :zap: zap (sugared) | 107 ns/op | +29% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 109 ns/op | +31% | 1 allocs/op
 
 Released under the [MIT License](LICENSE.txt)
 
