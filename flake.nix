@@ -22,7 +22,7 @@
         in {
           devenv.shells.default = {
             languages.go.enable = true;
-            languages.go.package = pkgs.go_1_23;
+            languages.go.package = pkgs.go_1_25;
             packages = [
               (buildWithSpecificGo pkgs.golangci-lint)
               (buildWithSpecificGo pkgs.gofumpt)

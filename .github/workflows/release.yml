@@ -17,7 +17,9 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v4
         with:
-          token: ${{ secrets.RELEASE_PLEASE_GITHUB_TOKEN }}
+          # The PAT lets CI run on the release PR; fall back to the default
+          # token so releases still work if the secret is ever removed.
+          token: ${{ secrets.RELEASE_PLEASE_GITHUB_TOKEN || github.token }}
           target-branch: ${{ github.ref_name }}
           config-file: .github/release-please-config.json
           manifest-file: .github/release-please-manifest.json

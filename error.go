@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	// Deliberate dependency: github.com/pkg/errors is archived, but consumers
+	// still commonly attach stacktraces with it, and detecting those requires
+	// its named StackTrace type.
 	"github.com/pkg/errors"
 )
 
@@ -40,7 +43,7 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 			// If it's a nil pointer, just say "<nil>". The likeliest causes are a
 			// error that fails to guard against nil or a nil pointer for a
 			// value receiver, and in either case, "<nil>" is a nice result.
-			if v := reflect.ValueOf(err); v.Kind() != reflect.Ptr || v.IsNil() {
+			if v := reflect.ValueOf(err); v.Kind() != reflect.Pointer || v.IsNil() {
 				retErr = fmt.Errorf("PANIC=%v", rerr)
 				putPrettyConsoleEncoder(enc)
 				return
@@ -55,7 +58,9 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 	}()
 
 	var causes []error
-	switch et := err.(type) {
+	// This deliberately inspects only the outermost error: each recursion
+	// level peels one layer, so errors.As would wrongly skip ahead here.
+	switch et := err.(type) { //nolint:errorlint
 	case interface{ Errors() []error }:
 		causes = et.Errors()
 	case interface{ Unwrap() []error }:
@@ -71,7 +76,7 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 		if cause != nil {
 			cbasic := cause.Error()
 			basic, _, _ = strings.Cut(basic, cbasic)
-			// TrimSuffix with seperator characters like : or , surrounded by
+			// TrimSuffix with separator characters like : or , surrounded by
 			// any number of spaces
 			basic = reErrorJoins.ReplaceAllString(strings.TrimSpace(basic), "")
 		}

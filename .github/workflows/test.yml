@@ -1,9 +1,18 @@
 name: Go Test
 
 on:
-  pull_request:
+  push:
     branches:
       - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -11,26 +20,38 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ["1.21", "1.22", "1.23"]
+        # "1.20" is the minimum version declared in go.mod; keep in sync.
+        go-version: ["1.20", "oldstable", "stable"]
     steps:
       - uses: actions/checkout@v4
       - name: Setup Go ${{ matrix.go-version }}
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-      - name: Test
-        run: make test
       - name: Test with Coverage
-        run: |
-          go test -race -coverprofile=coverage.out -covermode=atomic ./...
-          go tool cover -func=coverage.out
+        run: make coverage
       - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: ./coverage.out
           flags: go-${{ matrix.go-version }}
           fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{ secrets.CODECOV_TOKEN }}
       - name: Benchmark
-        run: make bench
+        if: matrix.go-version == 'stable'
+        run: make bench BENCH_FLAGS=-benchmem
+
+  readme:
+    name: README up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Check README matches its template
+        # Benchmark table rows embed live timings that change on every run,
+        # so they are filtered out of the comparison on both sides.
+        run: |
+          go run internal/readme/readme.go < internal/readme/readme.tmpl | grep -v '^| :zap:' > readme.generated
+          grep -v '^| :zap:' README.md | diff - readme.generated

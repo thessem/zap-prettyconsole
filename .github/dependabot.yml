@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # Security-only for Go modules: as a library, every require bump raises
+  # the version floor for all consumers, so routine updates are skipped.
+  # Setting the PR limit to 0 disables version updates while still allowing
+  # Dependabot security updates, which SHOULD raise our floors — a minimum
+  # with a known CVE is not one we want to declare. Requires "Dependabot
+  # security updates" to be enabled in the repository security settings.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      go-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      github-actions:
+        patterns:
+          - "*"
