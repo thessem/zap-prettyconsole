@@ -1,11 +1,15 @@
 package prettyconsole
 
 import (
+	"context"
+	"encoding/json"
 	"math"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -293,4 +297,157 @@ func BenchmarkDumpValue(b *testing.B) {
 		var sb strings.Builder
 		_ = dumpValue(&sb, v)
 	}
+}
+
+// The tests below are mined from the failure classes reported against
+// go-spew and Code-Hex/dd, plus this project's own closed issues, to make
+// sure replacing dd regressed none of them.
+
+// panickyStringer implements every method a dumper might be tempted to
+// call. go-spew invoked these and accumulated panic bugs (#45, #115,
+// #141, #144); this dumper never calls user methods, so it is immune by
+// construction.
+type panickyStringer struct{ Field int }
+
+func (panickyStringer) String() string   { panic("String called") }
+func (panickyStringer) Error() string    { panic("Error called") }
+func (panickyStringer) GoString() string { panic("GoString called") }
+
+func TestDumpNeverInvokesUserMethods(t *testing.T) {
+	out := dump(t, panickyStringer{Field: 1})
+	assert.Contains(t, out, "Field: 1")
+
+	// spew #141/#115: Stringers as map keys and values got invalid
+	// receivers or panicked.
+	out = dump(t, map[panickyStringer]panickyStringer{{Field: 2}: {Field: 3}})
+	assert.Contains(t, out, "Field: 2")
+	assert.Contains(t, out, "Field: 3")
+
+	// spew #144: custom error wrapping another custom error.
+	out = dump(t, struct{ Err error }{Err: panickyStringer{Field: 4}})
+	assert.Contains(t, out, "Field: 4")
+}
+
+// TestDumpPointerChains mirrors go-spew's corpus, which exercises value,
+// pointer, pointer-to-pointer and nil-pointer variants of every type.
+func TestDumpPointerChains(t *testing.T) {
+	v := 42
+	p := &v
+	pp := &p
+	var np *int
+	assert.Equal(t, "&42", dump(t, p))
+	assert.Equal(t, "&&42", dump(t, pp))
+	assert.Equal(t, "(*int)(nil)", dump(t, np))
+
+	s := "x"
+	ps := &s
+	assert.Equal(t, `&"x"`, dump(t, ps))
+}
+
+// TestDumpStructKeyedMap covers go-spew #108: sorting map keys that are
+// structs with private fields panicked there.
+func TestDumpStructKeyedMap(t *testing.T) {
+	type privKey struct{ id int }
+	m := map[privKey]string{{id: 2}: "two", {id: 1}: "one"}
+	out := dump(t, m)
+	assert.Contains(t, out, `"one"`)
+	assert.Contains(t, out, `"two"`)
+	// Deterministic ordering by rendered key.
+	assert.Equal(t, out, dump(t, m))
+}
+
+// TestDumpPointerKeyedMap must not panic and must render pointee content.
+func TestDumpPointerKeyedMap(t *testing.T) {
+	k := &dumpBasics{Exported: 5}
+	out := dump(t, map[*dumpBasics]string{k: "v"})
+	assert.Contains(t, out, "Exported: 5")
+	assert.Contains(t, out, `"v"`)
+}
+
+// TestDumpNaNMapKeys: maps can legally hold several NaN keys; sorting
+// rendered keys must not panic and output must stay stable in shape.
+func TestDumpNaNMapKeys(t *testing.T) {
+	m := map[float64]int{math.NaN(): 1, math.NaN(): 2, 1.5: 3}
+	out := dump(t, m)
+	assert.Contains(t, out, "NaN: ")
+	assert.Contains(t, out, "1.5: 3")
+}
+
+// TestDumpStdlibInternals is informed by dd #21, whose tests asserted the
+// exact internals of reflect.Value and context.Background and broke on a
+// Go upgrade. We assert only that such values dump without panicking -
+// users do log these by accident.
+func TestDumpStdlibInternals(t *testing.T) {
+	var sb strings.Builder
+	require.NoError(t, dumpValue(&sb, reflect.ValueOf(42)))
+	assert.NotEmpty(t, sb.String())
+
+	sb.Reset()
+	require.NoError(t, dumpValue(&sb, context.Background()))
+	assert.NotEmpty(t, sb.String())
+}
+
+// TestDumpDecodedJSON mirrors dd's testdata corpus (large decoded JSON
+// documents): deeply mixed maps and slices must render deterministically.
+func TestDumpDecodedJSON(t *testing.T) {
+	var v interface{}
+	blob := `{"users":[{"name":"a","tags":["x","y"],"meta":{"n":1.5,"ok":true}},
+	          {"name":"b","tags":[],"meta":{"n":null,"ok":false}}],"total":2}`
+	require.NoError(t, json.Unmarshal([]byte(blob), &v))
+	out := dump(t, v)
+	assert.Contains(t, out, `"name": "a"`)
+	assert.Contains(t, out, `"n": nil`)
+	assert.Equal(t, out, dump(t, v), "decoded JSON must dump deterministically")
+}
+
+// TestDumpOTelSpanContextShape is the regression test for this project's
+// issue #23. The real otel trace.SpanContext keeps its fields unexported;
+// the earlier test used exported look-alikes, which hid the harder case.
+func TestDumpOTelSpanContextShape(t *testing.T) {
+	type traceID [16]byte
+	type spanID [8]byte
+	type spanContext struct {
+		traceID    traceID
+		spanID     spanID
+		traceFlags byte //nolint:unused // read via reflection by the dumper
+		remote     bool
+	}
+	sc := spanContext{
+		traceID: traceID{
+			0x53, 0xae, 0x01, 0xc0, 0x1f, 0x35, 0xb7, 0x1e,
+			0xa7, 0x1b, 0x7b, 0xed, 0xef, 0x1c, 0x67, 0xdd,
+		},
+		spanID:     spanID{0x9a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f, 0x7a, 0x8b},
+		traceFlags: 1,
+		remote:     true,
+	}
+	out := dump(t, sc)
+	assert.Contains(t, out, `"53ae01c01f35b71ea71b7bedef1c67dd"`)
+	assert.Contains(t, out, `"9a2b3c4d5e6f7a8b"`)
+	assert.Contains(t, out, "traceFlags: 1")
+	assert.NotContains(t, out, "uint8")
+
+	// And nested inside a map value, where reflection values are not
+	// addressable - the harder unexported path.
+	out = dump(t, map[string]spanContext{"ctx": sc})
+	assert.Contains(t, out, `"53ae01c01f35b71ea71b7bedef1c67dd"`)
+}
+
+// TestDumpNonAddressableUnexportedTime documents the one degradation on
+// the non-addressable path: an unexported time.Time reached through a map
+// value cannot use the addressability bypass, so it falls back to a field
+// dump. It must never panic.
+func TestDumpNonAddressableUnexportedTime(t *testing.T) {
+	type wrap struct{ at time.Time }
+	out := dump(t, map[string]wrap{"w": {at: time.Unix(0, 0)}})
+	assert.Contains(t, out, "at: ")
+}
+
+func TestDumpInvalidUTF8String(t *testing.T) {
+	assert.Equal(t, `"ok\xff\xfego"`, dump(t, "ok\xff\xfego"))
+}
+
+func TestDumpUintptrAndUnsafe(t *testing.T) {
+	assert.Equal(t, "0x0", dump(t, uintptr(0)))
+	assert.Equal(t, "0x0", dump(t, unsafe.Pointer(nil)))
 }
