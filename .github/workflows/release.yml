@@ -15,7 +15,7 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         with:
           # The PAT lets CI run on the release PR; fall back to the default
           # token so releases still work if the secret is ever removed.
