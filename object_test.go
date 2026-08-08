@@ -1,6 +1,7 @@
 package prettyconsole
 
 import (
+	"encoding/base64"
 	"errors"
 	"io"
 	"testing"
@@ -258,4 +259,17 @@ func TestReflectedEncoderError(t *testing.T) {
 	out := stripANSI(buf.String())
 	assert.Contains(t, out, "rError=encode failed")
 	assert.Contains(t, out, "after")
+}
+
+// TestAddBinarySizes covers the stack-buffer and heap paths of the direct
+// base64 encoding against the stdlib's reference output.
+func TestAddBinarySizes(t *testing.T) {
+	for _, n := range []int{0, 1, 3, 47, 48, 100, 300} {
+		value := make([]byte, n)
+		for i := range value {
+			value[i] = byte(i * 7)
+		}
+		out := encodePlain(t, zap.Binary("bin", value))
+		assert.Contains(t, out, "bin="+base64.StdEncoding.EncodeToString(value), "n=%d", n)
+	}
 }

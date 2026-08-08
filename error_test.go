@@ -3,10 +3,12 @@ package prettyconsole
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"testing"
 	"time"
 
 	pkgerrors "github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -89,4 +91,20 @@ func TestEncodeEntryErrors(t *testing.T) {
 		},
 	}
 	runGoldenCases(t, tests)
+}
+
+// TestTrimErrorJoins checks the manual trimmer against the regex it
+// replaced, quirks included (the historical class [\s,:;\\n]+$ also trims
+// literal 'n' and backslash characters).
+func TestTrimErrorJoins(t *testing.T) {
+	oldRegex := regexp.MustCompile(`[\s,:;\\n]+$`)
+	corpus := []string{
+		"", "plain", "trailing: ", "trailing:", "a,b,c,,,", "semi;; ;",
+		"keeps inner: colons: here", "backslash\\", "letter n", "nn n n",
+		"tabs\t\t", "newlines\n\n", "mixed \t,:;\\n \n", ": ; , \\ n",
+		"unicode é:", "no trim.", "x", ",", "\\", "n",
+	}
+	for _, s := range corpus {
+		assert.Equal(t, oldRegex.ReplaceAllString(s, ""), trimErrorJoins(s), "input %q", s)
+	}
 }

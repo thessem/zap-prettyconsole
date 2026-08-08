@@ -49,6 +49,11 @@ type dumpState struct {
 	// once and are reused stack-style across nested maps.
 	kbuf    []byte
 	entries []mapEntry
+	// iter is a reusable map iterator; MapRange allocates one per call
+	// otherwise. iterInUse guards the exotic case of rendering a nested
+	// map while a map key is still being iterated (pointer-to-map keys).
+	iter      reflect.MapIter
+	iterInUse bool
 }
 
 type mapEntry struct {
@@ -413,7 +418,18 @@ func (d *dumpState) mapValue(v reflect.Value) {
 		d.kbuf = d.kbuf[:kbase]
 		d.entries = d.entries[:ebase]
 	}()
-	iter := v.MapRange()
+	var iter *reflect.MapIter
+	if !d.iterInUse {
+		d.iterInUse = true
+		d.iter.Reset(v)
+		iter = &d.iter
+		defer func() {
+			d.iter.Reset(reflect.Value{})
+			d.iterInUse = false
+		}()
+	} else {
+		iter = v.MapRange()
+	}
 	for iter.Next() {
 		mark := len(d.buf)
 		d.value(iter.Key())
