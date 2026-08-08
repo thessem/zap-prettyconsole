@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	pkgerrors "github.com/pkg/errors"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -43,7 +44,7 @@ func BenchmarkWithoutFields(b *testing.B) {
 		})
 	})
 	b.Run("Zap.Pretty", func(b *testing.B) {
-		logger := newZapLogger(zap.DebugLevel)
+		logger := newBenchmarkPrettyZapLogger(zap.DebugLevel)
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
@@ -52,7 +53,7 @@ func BenchmarkWithoutFields(b *testing.B) {
 		})
 	})
 	b.Run("Zap.Pretty.Sugar", func(b *testing.B) {
-		logger := newZapLogger(zap.DebugLevel).Sugar()
+		logger := newBenchmarkPrettyZapLogger(zap.DebugLevel).Sugar()
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
@@ -61,7 +62,7 @@ func BenchmarkWithoutFields(b *testing.B) {
 		})
 	})
 	b.Run("Zap.Pretty.SugarFormatting", func(b *testing.B) {
-		logger := newZapLogger(zap.DebugLevel).Sugar()
+		logger := newBenchmarkPrettyZapLogger(zap.DebugLevel).Sugar()
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
@@ -391,4 +392,100 @@ func BenchmarkReflectedField(b *testing.B) {
 		}
 		buf.Free()
 	}
+}
+
+// BenchmarkWebRequest models the most common real-world log line: an HTTP
+// middleware access log with mixed scalar fields.
+func BenchmarkWebRequest(b *testing.B) {
+	fields := func() []zap.Field {
+		return []zap.Field{
+			zap.String("method", "GET"),
+			zap.String("path", "/api/v1/users/42/orders"),
+			zap.Int("status", 200),
+			zap.Duration("latency", 17*time.Millisecond+345*time.Microsecond),
+			zap.Int("bytes", 15320),
+			zap.String("request_id", "c7dbe9a1-4f6b-4c9d-9e5a-8b2f0a3d1c4e"),
+			zap.String("remote_addr", "10.32.4.17:58122"),
+		}
+	}
+	b.Run("Zap", func(b *testing.B) {
+		logger := newZapLogger(zap.DebugLevel)
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				logger.Info("request completed", fields()...)
+			}
+		})
+	})
+	b.Run("Zap.Pretty", func(b *testing.B) {
+		logger := newBenchmarkPrettyZapLogger(zap.DebugLevel)
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				logger.Info("request completed", fields()...)
+			}
+		})
+	})
+}
+
+// BenchmarkWrappedError is this library's home turf: logging an error
+// wrapped with github.com/pkg/errors, stacktraces included.
+func BenchmarkWrappedError(b *testing.B) {
+	wrapped := pkgerrors.Wrap(pkgerrors.Wrap(errExample, "fetching user"), "handling request")
+	b.Run("Zap", func(b *testing.B) {
+		logger := newZapLogger(zap.DebugLevel)
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				logger.Error("request failed", zap.Error(wrapped), zap.Int("status", 500))
+			}
+		})
+	})
+	b.Run("Zap.Pretty", func(b *testing.B) {
+		logger := newBenchmarkPrettyZapLogger(zap.DebugLevel)
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				logger.Error("request failed", zap.Error(wrapped), zap.Int("status", 500))
+			}
+		})
+	})
+}
+
+// BenchmarkReflectedObject logs a plain struct that satisfies no marshaler
+// interface: zap's JSON encoder reflects via encoding/json, this encoder
+// uses its built-in dumper.
+func BenchmarkReflectedObject(b *testing.B) {
+	type serverConfig struct {
+		Host     string
+		Port     int
+		Features []string
+		Limits   map[string]int
+		Timeout  time.Duration
+	}
+	cfg := serverConfig{
+		Host:     "0.0.0.0",
+		Port:     8443,
+		Features: []string{"tracing", "metrics", "profiling"},
+		Limits:   map[string]int{"rps": 500, "burst": 1000},
+		Timeout:  30 * time.Second,
+	}
+	b.Run("Zap", func(b *testing.B) {
+		logger := newZapLogger(zap.DebugLevel)
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				logger.Info("loaded configuration", zap.Any("config", cfg))
+			}
+		})
+	})
+	b.Run("Zap.Pretty", func(b *testing.B) {
+		logger := newBenchmarkPrettyZapLogger(zap.DebugLevel)
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				logger.Info("loaded configuration", zap.Any("config", cfg))
+			}
+		})
+	})
 }

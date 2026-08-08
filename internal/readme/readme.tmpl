@@ -3,6 +3,7 @@
 [![Go Test](https://github.com/thessem/zap-prettyconsole/actions/workflows/test.yml/badge.svg)](https://github.com/thessem/zap-prettyconsole/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/thessem/zap-prettyconsole/branch/main/graph/badge.svg)](https://codecov.io/gh/thessem/zap-prettyconsole)
 [![Go Report Card](https://goreportcard.com/badge/github.com/thessem/zap-prettyconsole)](https://goreportcard.com/report/github.com/thessem/zap-prettyconsole)
+[![Go Reference](https://pkg.go.dev/badge/github.com/thessem/zap-prettyconsole.svg)](https://pkg.go.dev/github.com/thessem/zap-prettyconsole)
 
 An encoder for Uber's [zap] logger that makes complex structured log output easily readable by humans.
 It prioritises displaying information in a clean and easy-to-understand way.
@@ -43,8 +44,8 @@ func main() {
 ```
 
 This is intended as a tool for local development, and not for running in production.
-In production I reccomend you use zap's built in JSON mode.
-Your logs in production will be getting parsed by computers, not humans, after-all.
+In production I recommend you use zap's built in JSON mode.
+Your logs in production will be getting parsed by computers, not humans, after all.
 Take a look at the [zap advanced configuration] example to configure zap to output "human" output locally, and "machine" output in production.
 
 This package takes particular care to represent structural information with indents and newlines (slightly YAML style), hopefully making it easy to figure out what each key-value belongs to:
@@ -114,7 +115,7 @@ When objects that do not satisfy `ObjectMarshaler` are logged, zap-prettyconsole
 Fixed-size byte arrays (of any size) are automatically formatted as compact hex strings, making them ideal for displaying OpenTelemetry trace IDs, span IDs, and other binary identifiers:
 ![otel_tracing](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/OTelTracing.png?raw=true)
 
-Supported byte array sizes include `[4]byte`, `[8]byte`, `[16]byte`, `[32]byte`, and `[64]byte` - covering common use cases like IPv4 addresses, UUIDs, trace IDs, and cryptographic hashes (MD5, SHA256, SHA512).
+Byte arrays of any size are formatted this way, covering IPv4 addresses, UUIDs, trace and span IDs, and cryptographic hashes of every length, and byte slices are rendered as hexdumps with offset comments.
 
 Strings passed to the logger will have their formatting printed and colourised, but you can opt out of this and print the raw strings.
 
@@ -144,15 +145,29 @@ You can change your separator character, newline characters, add caller/function
 ## Performance
 
 Whilst this library is described as "development mode" it is still coded to be as performant as possible, saving your CPU cycles for running lots of IDE plugins.
+Colour codes and level labels are precomputed, encoders and buffers are pooled, string escaping is table-driven, field sorting is allocation-free, and the built-in reflection dumper writes straight into the log buffer.
 
-The main performance overhead introduced with this encoder is because of the stable field ordering, we sort every structured log field alphabetically.
-Although the relative overhead is high, the absolute overhead is still quite small, and probably wont matter for development logging anyway!
+All the numbers below compare against zap's production JSON encoder, which does less work: no colours, no field sorting, no indentation.
+They were measured on the same machine, in the same run (`make bench`).
+
+Log a typical HTTP access line (a message and seven scalar fields):
+
+{{.BenchmarkWebRequest}}
+
+Log an error wrapped with `github.com/pkg/errors`, stacktraces included - this encoder's home turf:
+
+{{.BenchmarkWrappedError}}
+
+Log a plain struct with no marshaler interface, so both encoders fall back to reflection:
+
+{{.BenchmarkReflectedObject}}
 
 Log a message and 10 fields:
 
 {{.BenchmarkAddingFields}}
 
-Log a message with a logger that already has 10 fields of context:
+Log a message with a logger that already has 10 fields of context.
+This is the one place zap has a structural advantage: it pre-encodes `With` fields once, while this encoder re-renders them on every line so they can be sorted alphabetically alongside the new fields:
 
 {{.BenchmarkAccumulatedContext}}
 

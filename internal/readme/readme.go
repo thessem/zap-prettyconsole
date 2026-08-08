@@ -61,6 +61,21 @@ func getTmplData() (*tmplData, error) {
 		return nil, err
 	}
 	tmplData.BenchmarkWithoutFields = rows
+	rows, err = getBenchmarkRows("BenchmarkWebRequest")
+	if err != nil {
+		return nil, err
+	}
+	tmplData.BenchmarkWebRequest = rows
+	rows, err = getBenchmarkRows("BenchmarkWrappedError")
+	if err != nil {
+		return nil, err
+	}
+	tmplData.BenchmarkWrappedError = rows
+	rows, err = getBenchmarkRows("BenchmarkReflectedObject")
+	if err != nil {
+		return nil, err
+	}
+	tmplData.BenchmarkReflectedObject = rows
 	return tmplData, nil
 }
 
@@ -169,6 +184,9 @@ type tmplData struct {
 	BenchmarkAddingFields       string
 	BenchmarkAccumulatedContext string
 	BenchmarkWithoutFields      string
+	BenchmarkWebRequest         string
+	BenchmarkWrappedError       string
+	BenchmarkReflectedObject    string
 }
 
 type benchmarkRow struct {

@@ -3,6 +3,7 @@
 [![Go Test](https://github.com/thessem/zap-prettyconsole/actions/workflows/test.yml/badge.svg)](https://github.com/thessem/zap-prettyconsole/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/thessem/zap-prettyconsole/branch/main/graph/badge.svg)](https://codecov.io/gh/thessem/zap-prettyconsole)
 [![Go Report Card](https://goreportcard.com/badge/github.com/thessem/zap-prettyconsole)](https://goreportcard.com/report/github.com/thessem/zap-prettyconsole)
+[![Go Reference](https://pkg.go.dev/badge/github.com/thessem/zap-prettyconsole.svg)](https://pkg.go.dev/github.com/thessem/zap-prettyconsole)
 
 An encoder for Uber's [zap] logger that makes complex structured log output easily readable by humans.
 It prioritises displaying information in a clean and easy-to-understand way.
@@ -43,8 +44,8 @@ func main() {
 ```
 
 This is intended as a tool for local development, and not for running in production.
-In production I reccomend you use zap's built in JSON mode.
-Your logs in production will be getting parsed by computers, not humans, after-all.
+In production I recommend you use zap's built in JSON mode.
+Your logs in production will be getting parsed by computers, not humans, after all.
 Take a look at the [zap advanced configuration] example to configure zap to output "human" output locally, and "machine" output in production.
 
 This package takes particular care to represent structural information with indents and newlines (slightly YAML style), hopefully making it easy to figure out what each key-value belongs to:
@@ -114,7 +115,7 @@ When objects that do not satisfy `ObjectMarshaler` are logged, zap-prettyconsole
 Fixed-size byte arrays (of any size) are automatically formatted as compact hex strings, making them ideal for displaying OpenTelemetry trace IDs, span IDs, and other binary identifiers:
 ![otel_tracing](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/OTelTracing.png?raw=true)
 
-Supported byte array sizes include `[4]byte`, `[8]byte`, `[16]byte`, `[32]byte`, and `[64]byte` - covering common use cases like IPv4 addresses, UUIDs, trace IDs, and cryptographic hashes (MD5, SHA256, SHA512).
+Byte arrays of any size are formatted this way, covering IPv4 addresses, UUIDs, trace and span IDs, and cryptographic hashes of every length, and byte slices are rendered as hexdumps with offset comments.
 
 Strings passed to the logger will have their formatting printed and colourised, but you can opt out of this and print the raw strings.
 
@@ -144,36 +145,59 @@ You can change your separator character, newline characters, add caller/function
 ## Performance
 
 Whilst this library is described as "development mode" it is still coded to be as performant as possible, saving your CPU cycles for running lots of IDE plugins.
+Colour codes and level labels are precomputed, encoders and buffers are pooled, string escaping is table-driven, field sorting is allocation-free, and the built-in reflection dumper writes straight into the log buffer.
 
-The main performance overhead introduced with this encoder is because of the stable field ordering, we sort every structured log field alphabetically.
-Although the relative overhead is high, the absolute overhead is still quite small, and probably wont matter for development logging anyway!
+All the numbers below compare against zap's production JSON encoder, which does less work: no colours, no field sorting, no indentation.
+They were measured on the same machine, in the same run (`make bench`).
+
+Log a typical HTTP access line (a message and seven scalar fields):
+
+| Package | Time | Time % to zap | Objects Allocated |
+| :------ | :--: | :-----------: | :---------------: |
+| :zap: zap | 477 ns/op | +0% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 740 ns/op | +55% | 5 allocs/op
+
+Log an error wrapped with `github.com/pkg/errors`, stacktraces included - this encoder's home turf:
+
+| Package | Time | Time % to zap | Objects Allocated |
+| :------ | :--: | :-----------: | :---------------: |
+| :zap: zap | 2223 ns/op | +0% | 21 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 3268 ns/op | +47% | 41 allocs/op
+
+Log a plain struct with no marshaler interface, so both encoders fall back to reflection:
+
+| Package | Time | Time % to zap | Objects Allocated |
+| :------ | :--: | :-----------: | :---------------: |
+| :zap: zap | 633 ns/op | +0% | 8 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 815 ns/op | +29% | 10 allocs/op
 
 Log a message and 10 fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 1001 ns/op | +0% | 5 allocs/op
-| :zap: zap (sugared) | 1526 ns/op | +52% | 10 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 3554 ns/op | +255% | 11 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 4988 ns/op | +398% | 16 allocs/op
+| :zap: zap | 1572 ns/op | +0% | 5 allocs/op
+| :zap: zap (sugared) | 2236 ns/op | +42% | 10 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 3142 ns/op | +100% | 9 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 3671 ns/op | +134% | 14 allocs/op
 
-Log a message with a logger that already has 10 fields of context:
+Log a message with a logger that already has 10 fields of context.
+This is the one place zap has a structural advantage: it pre-encodes `With` fields once, while this encoder re-renders them on every line so they can be sorted alphabetically alongside the new fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 90 ns/op | +0% | 0 allocs/op
-| :zap: zap (sugared) | 108 ns/op | +20% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 3261 ns/op | +3523% | 6 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 3465 ns/op | +3750% | 7 allocs/op
+| :zap: zap | 107 ns/op | +0% | 0 allocs/op
+| :zap: zap (sugared) | 163 ns/op | +52% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 2326 ns/op | +2074% | 4 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 2524 ns/op | +2259% | 5 allocs/op
 
 Log a static string, without any context or `printf`-style templating:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 83 ns/op | +0% | 0 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 91 ns/op | +10% | 0 allocs/op
-| :zap: zap (sugared) | 107 ns/op | +29% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 109 ns/op | +31% | 1 allocs/op
+| :zap: zap | 131 ns/op | +0% | 0 allocs/op
+| :zap: zap (sugared) | 169 ns/op | +29% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 187 ns/op | +43% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 211 ns/op | +61% | 2 allocs/op
 
 Released under the [MIT License](LICENSE.txt)
 
