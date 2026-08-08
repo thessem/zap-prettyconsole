@@ -145,7 +145,7 @@ You can change your separator character, newline characters, add caller/function
 ## Performance
 
 Whilst this library is described as "development mode" it is still coded to be as performant as possible, saving your CPU cycles for running lots of IDE plugins.
-Colour codes and level labels are precomputed, encoders and buffers are pooled, string escaping is table-driven, field sorting is allocation-free, and the built-in reflection dumper writes straight into the log buffer.
+Colour codes and level labels are precomputed, encoders and buffers are pooled, string escaping checks eight bytes at a time, field sorting is allocation-free, accumulated `With` context is pre-sorted and its rendering cached per level, and the built-in reflection dumper writes straight into the log buffer.
 
 All the numbers below compare against zap's production JSON encoder, which does less work: no colours, no field sorting, no indentation.
 They were measured on the same machine, in the same run (`make bench`).
@@ -154,50 +154,50 @@ Log a typical HTTP access line (a message and seven scalar fields):
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 477 ns/op | +0% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 740 ns/op | +55% | 5 allocs/op
+| :zap: zap | 480 ns/op | +0% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 613 ns/op | +28% | 1 allocs/op
 
 Log an error wrapped with `github.com/pkg/errors`, stacktraces included - this encoder's home turf:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 2223 ns/op | +0% | 21 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 3268 ns/op | +47% | 41 allocs/op
+| :zap: zap | 2655 ns/op | +0% | 21 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 2809 ns/op | +6% | 27 allocs/op
 
 Log a plain struct with no marshaler interface, so both encoders fall back to reflection:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 633 ns/op | +0% | 8 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 815 ns/op | +29% | 10 allocs/op
+| :zap: zap | 640 ns/op | +0% | 8 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 761 ns/op | +19% | 9 allocs/op
 
 Log a message and 10 fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 1572 ns/op | +0% | 5 allocs/op
-| :zap: zap (sugared) | 2236 ns/op | +42% | 10 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 3142 ns/op | +100% | 9 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 3671 ns/op | +134% | 14 allocs/op
+| :zap: zap | 1429 ns/op | +0% | 5 allocs/op
+| :zap: zap (sugared) | 2125 ns/op | +49% | 10 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 4098 ns/op | +187% | 5 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 4490 ns/op | +214% | 10 allocs/op
 
 Log a message with a logger that already has 10 fields of context.
-This is the one place zap has a structural advantage: it pre-encodes `With` fields once, while this encoder re-renders them on every line so they can be sorted alphabetically alongside the new fields:
+Like zap itself, this encoder renders accumulated context once (per level, since colours differ) and reuses it on every line that adds no new fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 107 ns/op | +0% | 0 allocs/op
-| :zap: zap (sugared) | 163 ns/op | +52% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 2326 ns/op | +2074% | 4 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 2524 ns/op | +2259% | 5 allocs/op
+| :zap: zap | 104 ns/op | +0% | 0 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 118 ns/op | +13% | 0 allocs/op
+| :zap: zap (sugared) | 152 ns/op | +46% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 172 ns/op | +65% | 1 allocs/op
 
 Log a static string, without any context or `printf`-style templating:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 131 ns/op | +0% | 0 allocs/op
-| :zap: zap (sugared) | 169 ns/op | +29% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 187 ns/op | +43% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 211 ns/op | +61% | 2 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 184 ns/op | -15% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 202 ns/op | -7% | 0 allocs/op
+| :zap: zap | 217 ns/op | +0% | 0 allocs/op
+| :zap: zap (sugared) | 351 ns/op | +62% | 1 allocs/op
 
 Released under the [MIT License](LICENSE.txt)
 
