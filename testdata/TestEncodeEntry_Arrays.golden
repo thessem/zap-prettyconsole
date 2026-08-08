@@ -1,0 +1,14 @@
+<gray>4:33PM<r><green> <r><green>INF<r><green> <r><bold><green>><r><r><green> <r>test message
+<green>  ↳ array<r><green>=[<r><green>[<r>1<green>, <r>2<green>, <r>3<green>, <r>4<green>]<r><green>, <r>
+           <green>[<r><green>]<r><green>, <r>
+           <green>[<r>1<green>, <r>2<green>, <r>3<green>, <r>
+            <green>[<r>1<green>]<r>
+           <green>]<r><green>, <r>
+           <green>[<r>1<green>, <r>2<green>, <r>3<green>, <r>
+            <green>[<r><green>{<r><green>3=<r>3<green> <r><green>4=<r>4<green>}<r><green>]<r>
+           <green>]<r><green>, <r>
+           <green>[<r><green>{<r><green>1=<r>1<green> <r><green>2=<r>2<green>}<r><green>, <r>3<green>, <r>4<green>, <r>5<green>]<r><green>, <r>
+           <green>[<r>1<green>, <r>2<green>, <r>
+            <green>{<r><green>3=<r>3<green> <r><green>4=<r>4<green>}<r>
+           <green>]<r>
+          <green>]<r>

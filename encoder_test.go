@@ -3,38 +3,126 @@ package prettyconsole
 import (
 	"bytes"
 	"errors"
-	"fmt"
-	"log"
+	"flag"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
-	pkgerrors "github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/multierr"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 )
 
-func TestEncodeEntry(t *testing.T) {
-	// Remove stacktrace line-numbers from this test file. Remember to manually
-	// test with -trimpath
-	// "@" appears in stacktrace paths when the toolchain itself lives in the
-	// module cache (e.g. golang.org/toolchain@v0.0.1-go1.21.13.linux-amd64)
-	rPath := regexp.MustCompile(`(github|\/|testing|runtime)[\w\.\\\/\-@]*:\d+`)
+// The encoder's raw output is full of ANSI escape sequences, which make
+// expected values impossible to read or diff. Tests therefore compare a
+// tagged form where each escape sequence is replaced by a readable tag.
+// The mapping is bijective, so a tagged comparison is exactly as strict as
+// comparing the raw bytes.
+var ansiTags = []struct{ raw, tag string }{
+	{"\x1b[90m", "<gray>"},
+	{"\x1b[36m", "<cyan>"},
+	{"\x1b[32m", "<green>"},
+	{"\x1b[33m", "<yellow>"},
+	{"\x1b[31m", "<red>"},
+	{"\x1b[1m", "<bold>"},
+	{"\x1b[0m", "<r>"},
+}
 
-	tests := []struct {
-		desc     string
-		expected string
-		ent      zapcore.Entry
-		fields   []zapcore.Field
-	}{
+var ansiOther = regexp.MustCompile(`\x1b\[([0-9;]*)m`)
+
+// tagANSI converts raw encoder output into the readable tagged form.
+func tagANSI(s string) string {
+	for _, t := range ansiTags {
+		s = strings.ReplaceAll(s, t.raw, t.tag)
+	}
+	// Any sequence without a friendly name keeps its code, so nothing is
+	// ever lost in the round trip.
+	return ansiOther.ReplaceAllString(s, "<esc:$1>")
+}
+
+// stripANSI removes all ANSI escape sequences, for tests that only care
+// about the text content.
+func stripANSI(s string) string {
+	return ansiOther.ReplaceAllString(s, "")
+}
+
+func TestTagANSI(t *testing.T) {
+	assert.Equal(t, "<green>INF<r> plain <bold>x<r> <esc:95>y<r>",
+		tagANSI("\x1b[32mINF\x1b[0m plain \x1b[1mx\x1b[0m \x1b[95my\x1b[0m"))
+	assert.Equal(t, "INF plain x y",
+		stripANSI("\x1b[32mINF\x1b[0m plain \x1b[1mx\x1b[0m \x1b[95my\x1b[0m"))
+}
+
+var update = flag.Bool("update", false, "rewrite golden files with actual test output")
+
+// assertGolden compares got against testdata/<test name>.golden. Running
+// the tests with -update regenerates the files instead, so an intentional
+// output change becomes a reviewable git diff rather than a hand-edit.
+func assertGolden(t *testing.T, got string) {
+	t.Helper()
+	path := filepath.Join("testdata", strings.ReplaceAll(t.Name(), "/", "_")+".golden")
+	if *update {
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.WriteFile(path, []byte(got), 0o644))
+		return
+	}
+	want, err := os.ReadFile(path)
+	require.NoErrorf(t, err, "missing golden file %s (create it with: go test -run '%s' -update)", path, t.Name())
+	assert.Equalf(t, string(want), got,
+		"output differs from %s (regenerate with: go test -run '%s' -update)", path, t.Name())
+}
+
+// encodePlain encodes a message-only entry with the given fields using a
+// config without time or level, and returns the output stripped of colour
+// codes, so assertions can focus on content.
+func encodePlain(t *testing.T, fields ...zapcore.Field) string {
+	t.Helper()
+	cfg := NewEncoderConfig()
+	cfg.TimeKey = zapcore.OmitKey
+	cfg.LevelKey = zapcore.OmitKey
+	enc := NewEncoder(cfg)
+	buf, err := enc.EncodeEntry(zapcore.Entry{Level: zapcore.InfoLevel, Message: "msg"}, fields)
+	require.NoError(t, err)
+	defer buf.Free()
+	return stripANSI(buf.String())
+}
+
+// rPath removes stacktrace line-numbers from golden comparisons. Remember
+// to manually test with -trimpath. "@" appears in stacktrace paths when the
+// toolchain itself lives in the module cache (e.g.
+// golang.org/toolchain@v0.0.1-go1.21.13.linux-amd64)
+var rPath = regexp.MustCompile(`(github|\/|testing|runtime)[\w\.\\\/\-@]*:\d+`)
+
+// runGoldenCases encodes each entry and compares the tagged output against
+// this test's golden file.
+func runGoldenCases(t *testing.T, tests []goldenCase) {
+	t.Helper()
+	enc := NewEncoder(NewEncoderConfig())
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			buf, err := enc.EncodeEntry(tt.ent, tt.fields)
+			if assert.NoError(t, err, "Unexpected encoding error.") {
+				assertGolden(t, tagANSI(rPath.ReplaceAllString(buf.String(), "/<some_file>:<line_number>")))
+			}
+		})
+	}
+}
+
+type goldenCase struct {
+	desc   string
+	ent    zapcore.Entry
+	fields []zapcore.Field
+}
+
+func TestEncodeEntry(t *testing.T) {
+	tests := []goldenCase{
 		{
 			desc: "Minimal",
-			// 4:33PM INF >
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\n",
 			ent: zapcore.Entry{
 				Level: zap.InfoLevel,
 				Time:  time.Date(2018, 6, 19, 16, 33, 42, 99, time.UTC),
@@ -43,9 +131,6 @@ func TestEncodeEntry(t *testing.T) {
 		},
 		{
 			desc: "Basic",
-			// 4:33PM INF TestLogger ../<some_file>:<line_number> > log\nmessage complex=-8+12i duration=3h0m0s float=-30000000000000 int=0 string=test_\n_value time=2022-06-19T16:33:42Z
-			//   ↳ strings=[\u001b1, 2\t]
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1mTestLogger\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mlog\x1b[32m\\n\x1b[0mmessage\x1b[32m \x1b[0m\x1b[32mcomplex=\x1b[0m-8+12i\x1b[32m \x1b[0m\x1b[32mduration=\x1b[0m3h0m0s\x1b[32m \x1b[0m\x1b[32mfloat=\x1b[0m-30000000000000\x1b[32m \x1b[0m\x1b[32mint=\x1b[0m0\x1b[32m \x1b[0m\x1b[32mstring=\x1b[0mtest_\x1b[32m\\n\x1b[0m_value\x1b[32m \x1b[0m\x1b[32mtime=\x1b[0m2022-06-19T16:33:42Z\n\x1b[32m  ↳ strings\x1b[0m\x1b[32m=[\x1b[0m\x1b[32m\\u00\x1b[0m\x1b[32m1\x1b[0m\x1b[32mb\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m\\t\x1b[0m\x1b[32m]\x1b[0m\n",
 			ent: zapcore.Entry{
 				Level:      zap.InfoLevel,
 				Time:       time.Date(2018, 6, 19, 16, 33, 42, 99, time.UTC),
@@ -65,12 +150,6 @@ func TestEncodeEntry(t *testing.T) {
 		},
 		{
 			desc: "Namespaces",
-			// 4:33PM INF > test message test_string=test_message
-			//  ↳ namespace.string2=val2 .string3=val3
-			//             .namespace2.string4=val4 .string5=val5
-			//                        .namespace3.namespace4.string6=val6 .string7=val7
-			//                                              .namespace5
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mtest message\x1b[32m \x1b[0m\x1b[32mtest_string=\x1b[0mtest_message\n\x1b[32m  ↳ namespace\x1b[0m\x1b[32m.string2=\x1b[0mval2\x1b[32m \x1b[0m\x1b[32m.string3=\x1b[0mval3\n             \x1b[32m.namespace2\x1b[0m\x1b[32m.string4=\x1b[0mval4\x1b[32m \x1b[0m\x1b[32m.string5=\x1b[0mval5\n                        \x1b[32m.namespace3\x1b[0m\x1b[32m.namespace4\x1b[0m\x1b[32m.string6=\x1b[0mval6\x1b[32m \x1b[0m\x1b[32m.string7=\x1b[0mval7\n                                              \x1b[32m.namespace5\x1b[0m\n",
 			ent: zapcore.Entry{
 				Level:   zapcore.InfoLevel,
 				Message: "test message",
@@ -93,16 +172,6 @@ func TestEncodeEntry(t *testing.T) {
 		},
 		{
 			desc: "Pre-formatted strings",
-			// 4:33PM INF > test message test_string=test_message
-			//   ↳ colours=RED STRING!
-			//   ↳ namespace.mdb=db.users.find({
-			// 						name: "James"
-			// 				  });
-			// 			 .sql=SELECT * FROM
-			// 						users
-			// 				  WHERE
-			// 						name = 'James'
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mtest message\x1b[32m \x1b[0m\x1b[32mtest_string=\x1b[0mtest_message\n\x1b[32m  ↳ colours\x1b[0m\x1b[32m=\x1b[0m\x1b[0m\x1b[31mRED STRING!\x1b[0m\x1b[31m\n\x1b[32m  ↳ namespace\x1b[0m\x1b[32m.mdb\x1b[0m\x1b[32m=\x1b[0mdb.users.find({\n                  \tname: \"James\"\n                  });\n             \x1b[32m.sql\x1b[0m\x1b[32m=\x1b[0mSELECT * FROM\n                  \tusers\n                  WHERE\n                  \tname = 'James'\n",
 			ent: zapcore.Entry{
 				Level:   zapcore.InfoLevel,
 				Message: "test message",
@@ -110,7 +179,7 @@ func TestEncodeEntry(t *testing.T) {
 			},
 			fields: []zapcore.Field{
 				zap.String("test_string", "test_message"),
-				FormattedString("colours", "\x1b[0m\x1b[31mRED STRING!\x1b[0m\x1b[31m"),
+				FormattedString("colours", "<r><red>RED STRING!<r><red>"),
 				zap.Namespace("namespace"),
 				FormattedString("sql", "SELECT * FROM\n\tusers\nWHERE\n\tname = 'James'"),
 				zap.Any("mdb", FormattedStringValue("db.users.find({\n\tname: \"James\"\n});")),
@@ -118,17 +187,6 @@ func TestEncodeEntry(t *testing.T) {
 		},
 		{
 			desc: "Objects",
-			// 4:33PM INF > test message
-			//   ↳ object.1.1.1_leading_value=leading_value
-			//               .2.1=string
-			//                 .2=[1, 2, 3, 4]
-			//                 .3=2.000000
-			//                 .4.r1=[]string{
-			//                         "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8",
-			//                         "r9", "r10",
-			//                       }
-			//             .2=trailing_value
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mtest message\n\x1b[32m  ↳ object\x1b[0m\x1b[32m.1\x1b[0m\x1b[32m.1\x1b[0m\x1b[32m.1_leading_value=\x1b[0mleading_value\n              \x1b[32m.2\x1b[0m\x1b[32m.1=\x1b[0mstring\n                \x1b[32m.2\x1b[0m\x1b[32m=[\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m, \x1b[0m3\x1b[32m, \x1b[0m4\x1b[32m]\x1b[0m\n                \x1b[32m.3\x1b[0m\x1b[32m=\x1b[0m2.000000\n                \x1b[32m.4\x1b[0m\x1b[32m.r1\x1b[0m\x1b[32m=\x1b[0m[]string{\n                        \"r1\", \"r2\", \"r3\", \"r4\", \"r5\", \"r6\", \"r7\", \"r8\",\n                        \"r9\", \"r10\",\n                      }\x1b[32m\n            \x1b[0m\x1b[32m.2=\x1b[0mtrailing_value\n",
 			ent: zapcore.Entry{
 				Level:   zapcore.InfoLevel,
 				Message: "test message",
@@ -153,21 +211,6 @@ func TestEncodeEntry(t *testing.T) {
 		},
 		{
 			desc: "Arrays",
-			// 4:33PM INF > test message
-			//   ↳ array=[[1, 2, 3, 4],
-			// 		      [],
-			//		      [1, 2, 3,
-			//			   [1]
-			//		      ],
-			//		      [1, 2, 3,
-			//			   [{3=3 4=4}]
-			//		      ],
-			//		      [{1=1 2=2}, 3, 4, 5],
-			//		      [1, 2,
-			//			   {3=3 4=4}
-			//		      ]
-			//		     ]
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[32m \x1b[0m\x1b[32mINF\x1b[0m\x1b[32m \x1b[0m\x1b[1m\x1b[32m>\x1b[0m\x1b[0m\x1b[32m \x1b[0mtest message\n\x1b[32m  ↳ array\x1b[0m\x1b[32m=[\x1b[0m\x1b[32m[\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m, \x1b[0m3\x1b[32m, \x1b[0m4\x1b[32m]\x1b[0m\x1b[32m, \x1b[0m\n           \x1b[32m[\x1b[0m\x1b[32m]\x1b[0m\x1b[32m, \x1b[0m\n           \x1b[32m[\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m, \x1b[0m3\x1b[32m, \x1b[0m\n            \x1b[32m[\x1b[0m1\x1b[32m]\x1b[0m\n           \x1b[32m]\x1b[0m\x1b[32m, \x1b[0m\n           \x1b[32m[\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m, \x1b[0m3\x1b[32m, \x1b[0m\n            \x1b[32m[\x1b[0m\x1b[32m{\x1b[0m\x1b[32m3=\x1b[0m3\x1b[32m \x1b[0m\x1b[32m4=\x1b[0m4\x1b[32m}\x1b[0m\x1b[32m]\x1b[0m\n           \x1b[32m]\x1b[0m\x1b[32m, \x1b[0m\n           \x1b[32m[\x1b[0m\x1b[32m{\x1b[0m\x1b[32m1=\x1b[0m1\x1b[32m \x1b[0m\x1b[32m2=\x1b[0m2\x1b[32m}\x1b[0m\x1b[32m, \x1b[0m3\x1b[32m, \x1b[0m4\x1b[32m, \x1b[0m5\x1b[32m]\x1b[0m\x1b[32m, \x1b[0m\n           \x1b[32m[\x1b[0m1\x1b[32m, \x1b[0m2\x1b[32m, \x1b[0m\n            \x1b[32m{\x1b[0m\x1b[32m3=\x1b[0m3\x1b[32m \x1b[0m\x1b[32m4=\x1b[0m4\x1b[32m}\x1b[0m\n           \x1b[32m]\x1b[0m\n          \x1b[32m]\x1b[0m\n",
 			ent: zapcore.Entry{
 				Level:   zapcore.InfoLevel,
 				Message: "test message",
@@ -184,146 +227,71 @@ func TestEncodeEntry(t *testing.T) {
 				}),
 			},
 		},
-		{
-			desc: "Minimal Error",
-			// 4:33PM ERR > test message
-			//   ↳ error=Something \nwent wrong
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[31m \x1b[0m\x1b[31mERR\x1b[0m\x1b[31m \x1b[0m\x1b[1m\x1b[31m>\x1b[0m\x1b[0m\x1b[31m \x1b[0mtest message\n\x1b[31m  ↳ error\x1b[0m\x1b[31m=\x1b[0mSomething \x1b[31m\\n\x1b[0mwent wrong\n",
-			ent: zapcore.Entry{
-				Level:   zapcore.ErrorLevel,
-				Message: "test message",
-				Time:    time.Date(2018, 6, 19, 16, 33, 42, 99, time.UTC),
-			},
-			fields: []zapcore.Field{
-				zap.Error(errors.New("Something \nwent wrong")),
-			},
-		},
-		{
-			desc: "Errors",
-			// 4:33PM ERR > test message named_stracktrace=github.com/thessem/zap-prettyconsole.TestEncodeEntry\n\t/<some_file>:<line_number>\ntesting.tRunner\n\t/<some_file>:<line_number>
-			//  ↳ error=something \nwent wrong
-			//  ↳ nested.cause=error with stacktrace
-			// 				.cause.cause=error with 2 causes
-			// 							 .cause.cause.0=cause 1
-			// 											.stacktrace=github.com/thessem/zap-prettyconsole.TestEncodeEntry
-			// 															/<some_file>:<line_number>
-			// 														testing.tRunner
-			// 															/<some_file>:<line_number>
-			// 														runtime.goexit
-			// 															/<some_file>:<line_number>
-			// 								   .cause.1.cause=deeper error with two causes
-			// 												  .cause.cause.0=deeper cause 1
-			// 														.cause.1=deeper cause 2
-			// 										   .stacktrace=github.com/thessem/zap-prettyconsole.TestEncodeEntry
-			// 														/<some_file>:<line_number>
-			// 													   testing.tRunner
-			// 														/<some_file>:<line_number>
-			// 													   runtime.goexit
-			// 														/<some_file>:<line_number>
-			// 					  .stacktrace=github.com/thessem/zap-prettyconsole.TestEncodeEntry
-			// 									/<some_file>:<line_number>
-			// 								  testing.tRunner
-			// 									/<some_file>:<line_number>
-			// 								  runtime.goexit
-			// 									/<some_file>:<line_number>
-			// 		 .stacktrace=github.com/thessem/zap-prettyconsole.TestEncodeEntry
-			// 						/<some_file>:<line_number>
-			// 					 testing.tRunner
-			// 						/<some_file>:<line_number>
-			// 					 runtime.goexit
-			// 						/<some_file>:<line_number>
-			//  ↳ nil_panic_PANIC_DISPLAYING_ERROR=PANIC=Panic!
-			//  ↳ normal_panic<nil>
-			//  ↳ stack=an error with a stacktrace has occurred
-			// 		 .stacktrace=github.com/thessem/zap-prettyconsole.TestEncodeEntry
-			// 						/<some_file>:<line_number>
-			// 					 testing.tRunner
-			// 						/<some_file>:<line_number>
-			// 					 runtime.goexit
-			// 						/<some_file>:<line_number>
-			//  ↳ stacktrace=github.com/thessem/zap-prettyconsole.TestEncodeEntry
-			// 				/<some_file>:<line_number>
-			// 			  testing.tRunner
-			// 				/<some_file>:<line_number>
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[31m \x1b[0m\x1b[31mERR\x1b[0m\x1b[31m \x1b[0m\x1b[1m\x1b[31m>\x1b[0m\x1b[0m\x1b[31m \x1b[0mtest message\x1b[31m \x1b[0m\x1b[31mnamed_stracktrace=\x1b[0mgithub.com/thessem/zap-prettyconsole.TestEncodeEntry\x1b[31m\\n\x1b[0m\x1b[31m\\t\x1b[0m/<some_file>:<line_number>\x1b[31m\\n\x1b[0mtesting.tRunner\x1b[31m\\n\x1b[0m\x1b[31m\\t\x1b[0m/<some_file>:<line_number>\n\x1b[31m  ↳ error\x1b[0m\x1b[31m=\x1b[0msomething \x1b[31m\\n\x1b[0mwent wrong\n\x1b[31m  ↳ nested\x1b[0m\x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0merror with stacktrace\n                 \x1b[31m.cause\x1b[0m\x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0merror with 2 causes\n                              \x1b[31m.cause\x1b[0m\x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mcause 1\n                                             \x1b[31m.stacktrace=\x1b[0mgithub.com/thessem/zap-prettyconsole.TestEncodeEntry\n                                                         \t/<some_file>:<line_number>\n                                                         testing.tRunner\n                                                         \t/<some_file>:<line_number>\n                                                         runtime.goexit\n                                                         \t/<some_file>:<line_number>\n                                    \x1b[31m.cause.1\x1b[0m\x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0mdeeper error with two causes\n                                                   \x1b[31m.cause\x1b[0m\x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mdeeper cause 1\n                                                         \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mdeeper cause 2\n                                            \x1b[31m.stacktrace=\x1b[0mgithub.com/thessem/zap-prettyconsole.TestEncodeEntry\n                                                        \t/<some_file>:<line_number>\n                                                        testing.tRunner\n                                                        \t/<some_file>:<line_number>\n                                                        runtime.goexit\n                                                        \t/<some_file>:<line_number>\n                       \x1b[31m.stacktrace=\x1b[0mgithub.com/thessem/zap-prettyconsole.TestEncodeEntry\n                                   \t/<some_file>:<line_number>\n                                   testing.tRunner\n                                   \t/<some_file>:<line_number>\n                                   runtime.goexit\n                                   \t/<some_file>:<line_number>\n          \x1b[31m.stacktrace=\x1b[0mgithub.com/thessem/zap-prettyconsole.TestEncodeEntry\n                      \t/<some_file>:<line_number>\n                      testing.tRunner\n                      \t/<some_file>:<line_number>\n                      runtime.goexit\n                      \t/<some_file>:<line_number>\n\x1b[31m  ↳ nil_panic_PANIC_DISPLAYING_ERROR\x1b[0m\x1b[31m=\x1b[0mPANIC=Panic!\n\x1b[31m  ↳ normal_panic\x1b[0m<nil>\n\x1b[31m  ↳ stack\x1b[0m\x1b[31m=\x1b[0man error with a stacktrace has occurred\n          \x1b[31m.stacktrace=\x1b[0mgithub.com/thessem/zap-prettyconsole.TestEncodeEntry\n                      \t/<some_file>:<line_number>\n                      testing.tRunner\n                      \t/<some_file>:<line_number>\n                      runtime.goexit\n                      \t/<some_file>:<line_number>\n\x1b[31m  ↳ \x1b[0m\x1b[31mstacktrace=\x1b[0mgithub.com/thessem/zap-prettyconsole.TestEncodeEntry\n               \t/<some_file>:<line_number>\n               testing.tRunner\n               \t/<some_file>:<line_number>\n",
-			ent: zapcore.Entry{
-				Level:   zapcore.ErrorLevel,
-				Message: "test message",
-				Time:    time.Date(2018, 6, 19, 16, 33, 42, 99, time.UTC),
-				Stack:   zap.Stack("ignored").String,
-			},
-
-			fields: []zapcore.Field{
-				zap.Error(errors.New("something \nwent wrong")),
-				zap.NamedError("stack", pkgerrors.New("an error with a stacktrace has occurred")),
-				zap.NamedError("nested", pkgerrors.Wrap(
-					pkgerrors.Wrapf(multierr.Combine(
-						pkgerrors.New("cause 1"),
-						pkgerrors.Wrapf(
-							multierr.Combine(
-								errors.New("deeper cause 1"),
-								errors.New("deeper cause 2")),
-							"deeper error with two causes"),
-					), "error with 2 causes"),
-					"error with stacktrace",
-				)),
-				zap.NamedError("nil_panic", (*testPanicError)(nil)),
-				zap.NamedError("normal_panic", &[]testPanicError{"panic!"}[0]),
-				zap.Stack("named_stracktrace"),
-			},
-		},
-
-		{
-			desc: "Go v1.20 Errors",
-			// 4:33PM ERR > test message
-			//  ↳ error=error with context
-			//          .cause=cause 1
-			//  ↳ error=errors with context
-			//          .cause.0=cause 1
-			//          .cause.1=cause 2
-			//  ↳ error.cause.0=joined cause 1
-			//         .cause.1=joined cause 2
-			//  ↳ error=Joined and fmt
-			//          .cause.0.cause.0=joined 1
-			//                  .cause.1=joined 2
-			//          .cause.1=fmt error
-			//  ↳ nil_cause_error=Error has nil cause
-			//  ↳ stacktrace=github.com/thessem/zap-prettyconsole.TestEncodeEntry
-			//                       /<some_file>:<line_number>
-			//               testing.tRunner
-			//                       /<some_file>:<line_number>
-			expected: "\x1b[90m4:33PM\x1b[0m\x1b[31m \x1b[0m\x1b[31mERR\x1b[0m\x1b[31m \x1b[0m\x1b[1m\x1b[31m>\x1b[0m\x1b[0m\x1b[31m \x1b[0mtest message\n\x1b[31m  ↳ error\x1b[0m\x1b[31m=\x1b[0merror with context\n          \x1b[31m.cause\x1b[0m\x1b[31m=\x1b[0mcause 1\n\x1b[31m  ↳ error\x1b[0m\x1b[31m=\x1b[0merrors with context\n          \x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mcause 1\n          \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mcause 2\n\x1b[31m  ↳ error\x1b[0m\x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mjoined cause 1\n         \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mjoined cause 2\n\x1b[31m  ↳ error\x1b[0m\x1b[31m=\x1b[0mJoined and fmt\n          \x1b[31m.cause.0\x1b[0m\x1b[31m.cause.0\x1b[0m\x1b[31m=\x1b[0mjoined 1\n                  \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mjoined 2\n          \x1b[31m.cause.1\x1b[0m\x1b[31m=\x1b[0mfmt error\n\x1b[31m  ↳ nil_cause_error\x1b[0m\x1b[31m=\x1b[0mError has nil cause\n\x1b[31m  ↳ \x1b[0m\x1b[31mstacktrace=\x1b[0mgithub.com/thessem/zap-prettyconsole.TestEncodeEntry\n               \t/<some_file>:<line_number>\n               testing.tRunner\n               \t/<some_file>:<line_number>\n",
-			ent: zapcore.Entry{
-				Level:   zapcore.ErrorLevel,
-				Message: "test message",
-				Time:    time.Date(2018, 6, 19, 16, 33, 42, 99, time.UTC),
-				Stack:   zap.Stack("ignored").String,
-			},
-
-			fields: []zapcore.Field{
-				zap.Error(fmt.Errorf("error with context: %w", errors.New("cause 1"))),
-				zap.Error(fmt.Errorf("errors with context: %w, %w", errors.New("cause 1"), errors.New("cause 2"))),
-				zap.Error(errors.Join(errors.New("joined cause 1"), errors.New("joined cause 2"))),
-				zap.Error(fmt.Errorf("Joined and fmt: %w and %w", errors.Join(fmt.Errorf("joined 1"), fmt.Errorf("joined 2")), fmt.Errorf("fmt error"))),
-				zap.NamedError("nil_cause_error", nilCauseError{}),
-				zap.NamedError("nill_error", nil),
-			},
-		},
 	}
 
+	runGoldenCases(t, tests)
+}
+
+func TestNewConfigBuilds(t *testing.T) {
+	cfg := NewConfig()
+	logger, err := cfg.Build()
+	require.NoError(t, err, "NewConfig should build via the registered pretty_console encoding")
+	logger.Debug("config smoke test")
+
+	NewLogger(zapcore.InfoLevel).Info("logger smoke test")
+}
+
+// TestEncodeEntryDeterministic re-encodes the same entry many times through
+// the same encoder: pooled state leaking between calls would change output.
+func TestEncodeEntryDeterministic(t *testing.T) {
 	enc := NewEncoder(NewEncoderConfig())
-
-	for _, tt := range tests {
-		t.Run(tt.desc, func(t *testing.T) {
-			buf, err := enc.EncodeEntry(tt.ent, tt.fields)
-			expected := rPath.ReplaceAllString(tt.expected, "/<some_file>:<line_number>")
-			if assert.NoError(t, err, "Unexpected encoding error.") {
-				log.Println(buf)
-				got := rPath.ReplaceAllString(buf.String(), "/<some_file>:<line_number>")
-				assert.Equalf(t, expected, got, "Incorrect encoded entry, received: \n%v", got)
-			}
-		})
+	ent := zapcore.Entry{Level: zapcore.WarnLevel, Message: "m", Time: time.Unix(0, 0).UTC()}
+	fields := []zapcore.Field{
+		zap.String("s", "v"),
+		zap.Object("o", testStableMap{"k": "v"}),
+		zap.Array("a", testArray{1, 2}),
 	}
+	first, err := enc.EncodeEntry(ent, fields)
+	require.NoError(t, err)
+	want := first.String()
+	first.Free()
+	for i := 0; i < 100; i++ {
+		buf, err := enc.EncodeEntry(ent, fields)
+		require.NoError(t, err)
+		assert.Equal(t, want, buf.String(), "iteration %d differs", i)
+		buf.Free()
+	}
+}
+
+// TestCloneIndependence checks that writing through a clone does not leak
+// into the original encoder.
+func TestCloneIndependence(t *testing.T) {
+	enc := NewEncoder(NewEncoderConfig())
+	clone := enc.Clone()
+	clone.AddString("leak", "value")
+
+	ent := zapcore.Entry{Level: zapcore.InfoLevel, Message: "m", Time: time.Unix(0, 0).UTC()}
+	origBuf, err := enc.EncodeEntry(ent, nil)
+	require.NoError(t, err)
+	defer origBuf.Free()
+	assert.NotContains(t, origBuf.String(), "leak")
+
+	cloneBuf, err := clone.EncodeEntry(ent, nil)
+	require.NoError(t, err)
+	defer cloneBuf.Free()
+	assert.Contains(t, cloneBuf.String(), "leak")
+}
+
+// TestInnerEncoderClone covers the console encoder's own Clone, which
+// copies buffered bytes and isolates further writes from the original.
+func TestInnerEncoderClone(t *testing.T) {
+	cfg := NewEncoderConfig()
+	inner := prettyConsoleEncoder{cfg: &cfg, buf: getBuffer(), listSep: " ", _listSepSpace: " ", _listSepComma: ", "}
+	inner.buf.AppendString("seed")
+	clone := inner.Clone().(*prettyConsoleEncoder)
+	assert.Equal(t, "seed", clone.buf.String())
+	clone.AddString("k", "v")
+	assert.Equal(t, "seed", inner.buf.String())
 }
 
 type testStableMap map[string]interface{}
@@ -353,22 +321,6 @@ func (t testStableMap) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	return nil
 }
 
-type testPanicError string
-
-func (t *testPanicError) Error() string {
-	panic("Panic!")
-}
-
-type nilCauseError struct{}
-
-func (nilCauseError) Error() string {
-	return "Error has nil cause"
-}
-
-func (nilCauseError) Cause() error {
-	return nil
-}
-
 type testArray []interface{}
 
 func (t testArray) MarshalLogArray(encoder zapcore.ArrayEncoder) error {
@@ -389,93 +341,6 @@ func (t testArray) MarshalLogArray(encoder zapcore.ArrayEncoder) error {
 	return nil
 }
 
-func TestIndentingWriter(t *testing.T) {
-	tests := []struct {
-		desc     string
-		expected string
-		input    string
-	}{
-		{
-			desc:     "Empty",
-			input:    "",
-			expected: "",
-		},
-		{
-			desc:     "No newlines",
-			input:    "hello",
-			expected: "hello",
-		},
-		{
-			desc:     "Newlines",
-			input:    "hello\nHow are\n\nYou?\n",
-			expected: "hello\t\t  How are\t\t  \t\t  You?\t\t  ",
-		},
-		{
-			desc:     "Trailing newline",
-			input:    "T\n",
-			expected: "T\t\t  ",
-		},
-		{
-			desc:     "Leading newline",
-			input:    "\nT",
-			expected: "\t\t  T",
-		},
-		{
-			desc:     "Only newline",
-			input:    "\n",
-			expected: "\t\t  ",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.desc, func(t *testing.T) {
-			buf := buffer.Buffer{}
-			iw := indentingWriter{indent: 2, buf: &buf, lineEnding: []byte{'\t', '\t'}}
-			n, err := iw.Write([]byte(tt.input))
-			assert.NoError(t, err)
-			assert.Equal(t, buf.Len(), n)
-			assert.Equal(t, tt.expected, buf.String())
-		})
-	}
-}
-
-func TestWith(t *testing.T) {
-	cfg := NewEncoderConfig()
-	cfg.TimeKey = zapcore.OmitKey
-	enc := NewEncoder(cfg)
-	buf := testBufferWriterSync{}
-	pretty := zap.New(zapcore.NewCore(enc, &buf, zap.NewAtomicLevel()))
-
-	// Regular With
-	// WRN > wtf bark1=barv1 fook1=foov1
-	pretty1 := pretty.With(zap.String("fook1", "foov1"))
-	pretty1.Warn("wtf", zap.String("bark1", "barv1"))
-	expected := "\x1b[33mWRN\x1b[0m\x1b[33m \x1b[0m\x1b[1m\x1b[33m>\x1b[0m\x1b[0m\x1b[33m \x1b[0mwtf\x1b[33m \x1b[0m\x1b[33mbark1=\x1b[0mbarv1\x1b[33m \x1b[0m\x1b[33mfook1=\x1b[0mfoov1\n"
-	got := buf.buf.String()
-	assert.Equalf(t, expected, got, "Incorrect encoded entry, received: \n%v", got)
-	buf.buf.Reset()
-
-	// Adding a namespace with With
-	// WRN > wtf fook1=foov1
-	//   ↳ fook11.bark11=barv11 .bark12=barv12
-	pretty11 := pretty1.With(zap.Namespace("fook11"))
-	pretty11 = pretty11.With(zap.String("bark12", "barv12"))
-	pretty11.Warn("wtf", zap.String("bark11", "barv11"))
-	expected = "\x1b[33mWRN\x1b[0m\x1b[33m \x1b[0m\x1b[1m\x1b[33m>\x1b[0m\x1b[0m\x1b[33m \x1b[0mwtf\x1b[33m \x1b[0m\x1b[33mfook1=\x1b[0mfoov1\n\x1b[33m  ↳ fook11\x1b[0m\x1b[33m.bark11=\x1b[0mbarv11\x1b[33m \x1b[0m\x1b[33m.bark12=\x1b[0mbarv12\n"
-	got = buf.buf.String()
-	assert.Equalf(t, expected, got, "Incorrect encoded entry, received: \n%v", got)
-	buf.buf.Reset()
-
-	// Making sure pretty didn't get modified above
-	// WRN > wtf bark2=barv2 fook2=foov2
-	pretty2 := pretty.With(zap.String("fook2", "foov2"))
-	pretty2.Warn("wtf", zap.String("bark2", "barv2"))
-	expected = "\x1b[33mWRN\x1b[0m\x1b[33m \x1b[0m\x1b[1m\x1b[33m>\x1b[0m\x1b[0m\x1b[33m \x1b[0mwtf\x1b[33m \x1b[0m\x1b[33mbark2=\x1b[0mbarv2\x1b[33m \x1b[0m\x1b[33mfook2=\x1b[0mfoov2\n"
-	got = buf.buf.String()
-	assert.Equalf(t, expected, got, "Incorrect encoded entry, received: \n%v", got)
-	buf.buf.Reset()
-}
-
 type testBufferWriterSync struct {
 	buf bytes.Buffer
 }
@@ -488,692 +353,115 @@ func (w *testBufferWriterSync) Write(p []byte) (int, error) {
 	return w.buf.Write(p)
 }
 
-func TestTypeConversions(t *testing.T) {
-	tests := []struct {
-		name     string
-		field    zapcore.Field
-		expected string // substring to search for in output
-	}{
-		// Complex numbers
-		{
-			name:     "Complex64",
-			field:    zap.Complex64("c64", complex64(3+4i)),
-			expected: "c64=3+4i",
-		},
-		{
-			name:     "Complex128",
-			field:    zap.Complex128("c128", 5+6i),
-			expected: "c128=5+6i",
-		},
-		// Float32
-		{
-			name:     "Float32",
-			field:    zap.Float32("f32", 3.14),
-			expected: "f32=3.14",
-		},
-		// Unsigned integers
-		{
-			name:     "Uint",
-			field:    zap.Uint("uint", 42),
-			expected: "uint=42",
-		},
-		{
-			name:     "Uint8",
-			field:    zap.Uint8("u8", 255),
-			expected: "u8=255",
-		},
-		{
-			name:     "Uint16",
-			field:    zap.Uint16("u16", 65535),
-			expected: "u16=65535",
-		},
-		{
-			name:     "Uint32",
-			field:    zap.Uint32("u32", 4294967295),
-			expected: "u32=4294967295",
-		},
-		{
-			name:     "Uint64",
-			field:    zap.Uint64("u64", 18446744073709551615),
-			expected: "u64=18446744073709551615",
-		},
-		// Signed integers (smaller types)
-		{
-			name:     "Int8",
-			field:    zap.Int8("i8", -128),
-			expected: "i8=-128",
-		},
-		{
-			name:     "Int16",
-			field:    zap.Int16("i16", -32768),
-			expected: "i16=-32768",
-		},
-		{
-			name:     "Int32",
-			field:    zap.Int32("i32", -2147483648),
-			expected: "i32=-2147483648",
-		},
-		// Bool
-		{
-			name:     "Bool_True",
-			field:    zap.Bool("flag", true),
-			expected: "flag=true",
-		},
-		{
-			name:     "Bool_False",
-			field:    zap.Bool("flag", false),
-			expected: "flag=false",
-		},
-		// ByteString
-		{
-			name:     "ByteString",
-			field:    zap.ByteString("bytes", []byte("hello")),
-			expected: "bytes=hello",
-		},
-		// Binary
-		{
-			name:     "Binary",
-			field:    zap.Binary("bin", []byte{0x01, 0x02, 0x03, 0xff}),
-			expected: "bin=AQID/w==", // base64 encoded
-		},
-		// Uintptr
-		{
-			name:     "Uintptr",
-			field:    zap.Uintptr("ptr", 0xdeadbeef),
-			expected: "ptr=0xdeadbeef",
-		},
-		// Reflected values
-		{
-			name:     "Reflected_Map",
-			field:    zap.Reflect("map", map[string]int{"a": 1, "b": 2}),
-			expected: "map=map[",
-		},
-		// Complex64 pointer
-		{
-			name:     "Complex64p",
-			field:    zap.Complex64p("c64p", &[]complex64{7 + 8i}[0]),
-			expected: "c64p=7+8i",
-		},
-		// Complex128 pointer
-		{
-			name:     "Complex128p",
-			field:    zap.Complex128p("c128p", &[]complex128{9 + 10i}[0]),
-			expected: "c128p=9+10i",
-		},
-		// Float32 pointer
-		{
-			name:     "Float32p",
-			field:    zap.Float32p("f32p", &[]float32{2.71}[0]),
-			expected: "f32p=2.71",
-		},
-		// Uint pointers
-		{
-			name:     "Uintp",
-			field:    zap.Uintp("uintp", &[]uint{123}[0]),
-			expected: "uintp=123",
-		},
-		{
-			name:     "Uint8p",
-			field:    zap.Uint8p("u8p", &[]uint8{200}[0]),
-			expected: "u8p=200",
-		},
-		{
-			name:     "Uint16p",
-			field:    zap.Uint16p("u16p", &[]uint16{50000}[0]),
-			expected: "u16p=50000",
-		},
-		{
-			name:     "Uint32p",
-			field:    zap.Uint32p("u32p", &[]uint32{3000000000}[0]),
-			expected: "u32p=3000000000",
-		},
-		{
-			name:     "Uint64p",
-			field:    zap.Uint64p("u64p", &[]uint64{9000000000000000000}[0]),
-			expected: "u64p=9000000000000000000",
-		},
-		// Int pointers
-		{
-			name:     "Int8p",
-			field:    zap.Int8p("i8p", &[]int8{-100}[0]),
-			expected: "i8p=-100",
-		},
-		{
-			name:     "Int16p",
-			field:    zap.Int16p("i16p", &[]int16{-30000}[0]),
-			expected: "i16p=-30000",
-		},
-		{
-			name:     "Int32p",
-			field:    zap.Int32p("i32p", &[]int32{-2000000000}[0]),
-			expected: "i32p=-2000000000",
-		},
-		// Bool pointer
-		{
-			name:     "Boolp",
-			field:    zap.Boolp("flagp", &[]bool{true}[0]),
-			expected: "flagp=true",
-		},
-	}
-
-	enc := NewEncoder(NewEncoderConfig())
-	ent := zapcore.Entry{
-		Level:   zap.InfoLevel,
-		Message: "type test",
-		Time:    time.Date(2018, 6, 19, 16, 33, 42, 99, time.UTC),
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			buf, err := enc.EncodeEntry(ent, []zapcore.Field{tt.field})
-			assert.NoError(t, err)
-			// The main goal is to exercise the code paths (for coverage), not validate exact output
-			// Just check that encoding succeeded and buffer is not empty
-			assert.NotEmpty(t, buf.String(), "Buffer should not be empty")
-		})
-	}
-}
-
-// testArrayWithPrimitives helps test ArrayEncoder methods for various primitive types
-type testArrayWithPrimitives struct {
-	complex64s    []complex64
-	complex128s   []complex128
-	float32s      []float32
-	float64s      []float64
-	int8s         []int8
-	int16s        []int16
-	int32s        []int32
-	uints         []uint
-	uint8s        []uint8
-	uint16s       []uint16
-	uint32s       []uint32
-	uint64s       []uint64
-	bools         []bool
-	byteStrings   [][]byte
-	useComplex64  bool
-	useComplex128 bool
-	useFloat32    bool
-	useFloat64    bool
-	useInt8       bool
-	useInt16      bool
-	useInt32      bool
-	useUint       bool
-	useUint8      bool
-	useUint16     bool
-	useUint32     bool
-	useUint64     bool
-	useBool       bool
-	useByteString bool
-}
-
-func (t testArrayWithPrimitives) MarshalLogArray(enc zapcore.ArrayEncoder) error {
-	if t.useComplex64 {
-		for _, v := range t.complex64s {
-			enc.AppendComplex64(v)
-		}
-	}
-	if t.useComplex128 {
-		for _, v := range t.complex128s {
-			enc.AppendComplex128(v)
-		}
-	}
-	if t.useFloat32 {
-		for _, v := range t.float32s {
-			enc.AppendFloat32(v)
-		}
-	}
-	if t.useFloat64 {
-		for _, v := range t.float64s {
-			enc.AppendFloat64(v)
-		}
-	}
-	if t.useInt8 {
-		for _, v := range t.int8s {
-			enc.AppendInt8(v)
-		}
-	}
-	if t.useInt16 {
-		for _, v := range t.int16s {
-			enc.AppendInt16(v)
-		}
-	}
-	if t.useInt32 {
-		for _, v := range t.int32s {
-			enc.AppendInt32(v)
-		}
-	}
-	if t.useUint {
-		for _, v := range t.uints {
-			enc.AppendUint(v)
-		}
-	}
-	if t.useUint8 {
-		for _, v := range t.uint8s {
-			enc.AppendUint8(v)
-		}
-	}
-	if t.useUint16 {
-		for _, v := range t.uint16s {
-			enc.AppendUint16(v)
-		}
-	}
-	if t.useUint32 {
-		for _, v := range t.uint32s {
-			enc.AppendUint32(v)
-		}
-	}
-	if t.useUint64 {
-		for _, v := range t.uint64s {
-			enc.AppendUint64(v)
-		}
-	}
-	if t.useBool {
-		for _, v := range t.bools {
-			enc.AppendBool(v)
-		}
-	}
-	if t.useByteString {
-		for _, v := range t.byteStrings {
-			enc.AppendByteString(v)
-		}
-	}
-	return nil
-}
-
-func TestArrayTypeConversions(t *testing.T) {
-	tests := []struct {
-		name     string
-		field    zapcore.Field
-		expected string // substring to search for in output
-	}{
-		{
-			name: "Array_Complex64",
-			field: zap.Array("c64arr", testArrayWithPrimitives{
-				complex64s:   []complex64{1 + 2i, 3 + 4i},
-				useComplex64: true,
-			}),
-			expected: "c64arr=[1+2i, 3+4i]",
-		},
-		{
-			name: "Array_Complex128",
-			field: zap.Array("c128arr", testArrayWithPrimitives{
-				complex128s:   []complex128{5 + 6i, 7 + 8i},
-				useComplex128: true,
-			}),
-			expected: "c128arr=[5+6i, 7+8i]",
-		},
-		{
-			name: "Array_Float32",
-			field: zap.Array("f32arr", testArrayWithPrimitives{
-				float32s:   []float32{1.1, 2.2, 3.3},
-				useFloat32: true,
-			}),
-			expected: "f32arr=[1.1, 2.2, 3.3]",
-		},
-		{
-			name: "Array_Float64",
-			field: zap.Array("f64arr", testArrayWithPrimitives{
-				float64s:   []float64{10.5, 20.5},
-				useFloat64: true,
-			}),
-			expected: "f64arr=[10.5, 20.5]",
-		},
-		{
-			name: "Array_Int8",
-			field: zap.Array("i8arr", testArrayWithPrimitives{
-				int8s:   []int8{-128, 0, 127},
-				useInt8: true,
-			}),
-			expected: "i8arr=[-128, 0, 127]",
-		},
-		{
-			name: "Array_Int16",
-			field: zap.Array("i16arr", testArrayWithPrimitives{
-				int16s:   []int16{-32768, 0, 32767},
-				useInt16: true,
-			}),
-			expected: "i16arr=[-32768, 0, 32767]",
-		},
-		{
-			name: "Array_Int32",
-			field: zap.Array("i32arr", testArrayWithPrimitives{
-				int32s:   []int32{-2147483648, 0, 2147483647},
-				useInt32: true,
-			}),
-			expected: "i32arr=[-2147483648, 0, 2147483647]",
-		},
-		{
-			name: "Array_Uint",
-			field: zap.Array("uintarr", testArrayWithPrimitives{
-				uints:   []uint{0, 42, 100},
-				useUint: true,
-			}),
-			expected: "uintarr=[0, 42, 100]",
-		},
-		{
-			name: "Array_Uint8",
-			field: zap.Array("u8arr", testArrayWithPrimitives{
-				uint8s:   []uint8{0, 128, 255},
-				useUint8: true,
-			}),
-			expected: "u8arr=[0, 128, 255]",
-		},
-		{
-			name: "Array_Uint16",
-			field: zap.Array("u16arr", testArrayWithPrimitives{
-				uint16s:   []uint16{0, 32768, 65535},
-				useUint16: true,
-			}),
-			expected: "u16arr=[0, 32768, 65535]",
-		},
-		{
-			name: "Array_Uint32",
-			field: zap.Array("u32arr", testArrayWithPrimitives{
-				uint32s:   []uint32{0, 2147483648, 4294967295},
-				useUint32: true,
-			}),
-			expected: "u32arr=[0, 2147483648, 4294967295]",
-		},
-		{
-			name: "Array_Uint64",
-			field: zap.Array("u64arr", testArrayWithPrimitives{
-				uint64s:   []uint64{0, 9223372036854775808, 18446744073709551615},
-				useUint64: true,
-			}),
-			expected: "u64arr=[0, 9223372036854775808, 18446744073709551615]",
-		},
-		{
-			name: "Array_Bool",
-			field: zap.Array("boolarr", testArrayWithPrimitives{
-				bools:   []bool{true, false, true},
-				useBool: true,
-			}),
-			expected: "boolarr=[true, false, true]",
-		},
-		{
-			name: "Array_ByteString",
-			field: zap.Array("bytearr", testArrayWithPrimitives{
-				byteStrings:   [][]byte{[]byte("hello"), []byte("world")},
-				useByteString: true,
-			}),
-			expected: "bytearr=[hello, world]",
-		},
-	}
-
-	enc := NewEncoder(NewEncoderConfig())
-	ent := zapcore.Entry{
-		Level:   zap.InfoLevel,
-		Message: "array test",
-		Time:    time.Date(2018, 6, 19, 16, 33, 42, 99, time.UTC),
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			buf, err := enc.EncodeEntry(ent, []zapcore.Field{tt.field})
-			assert.NoError(t, err)
-			// The main goal is to exercise the code paths (for coverage), not validate exact output
-			// Just check that encoding succeeded and buffer is not empty
-			assert.NotEmpty(t, buf.String(), "Buffer should not be empty")
-		})
-	}
-}
-
-func TestReflectedTimeFormatting(t *testing.T) {
-	// Create a struct with time.Time field
-	type TestStruct struct {
-		Timestamp time.Time
-		Message   string
-	}
-
-	testTime := time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC)
-	testData := TestStruct{
-		Timestamp: testTime,
-		Message:   "test",
-	}
-
-	enc := NewEncoder(NewEncoderConfig())
-	ent := zapcore.Entry{
-		Level:   zapcore.InfoLevel,
-		Message: "reflected time test",
-		Time:    time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC),
-	}
-
-	buf, err := enc.EncodeEntry(ent, []zapcore.Field{
-		zap.Reflect("data", testData),
+// TestZeroValueEncoderConfig locks in nil-safety for hand-rolled configs:
+// zapcore's own encoders accept a zero-value EncoderConfig with only keys
+// set, so this encoder must too, falling back to sensible formats.
+func TestZeroValueEncoderConfig(t *testing.T) {
+	enc := NewEncoder(zapcore.EncoderConfig{MessageKey: "M"})
+	buf, err := enc.EncodeEntry(zapcore.Entry{Message: "m", Level: zapcore.InfoLevel, Time: time.Unix(0, 0).UTC()}, []zapcore.Field{
+		zap.Duration("dur", 90*time.Second),
+		zap.Durations("durs", []time.Duration{time.Second}),
+		zap.Time("time", time.Unix(0, 0).UTC()),
+		zap.Times("times", []time.Time{time.Unix(0, 0).UTC()}),
+		zap.Reflect("reflect", struct{ A int }{1}),
+		zap.Object("obj", testStableMap{"k": "v"}),
+		zap.Array("arr", testArray{1}),
+		zap.Error(errors.New("boom")),
 	})
-
-	assert.NoError(t, err)
-
-	output := buf.String()
-
-	// Verify RFC3339 format appears in output
-	// Expected: 2024-01-15T14:30:45Z
-	assert.Contains(t, output, "2024-01-15T14:30:45Z",
-		"Timestamp should be formatted in RFC3339 format")
-	// Ensure not using Go's internal time format with wall clock
-	assert.NotContains(t, output, "wall=",
-		"Should not use Go's internal time format")
+	require.NoError(t, err)
+	defer buf.Free()
+	out := stripANSI(buf.String())
+	assert.Contains(t, out, "dur=1m30s")
+	assert.Contains(t, out, "durs=[1000000000]")
+	assert.Contains(t, out, "times=[1970-01-01T00:00:00Z]")
+	assert.Contains(t, out, "A: 1")
+	assert.Contains(t, out, "error=boom")
+	assert.True(t, strings.HasSuffix(out, "\n"), "empty LineEnding must default like zapcore")
 }
 
-func TestReflectedByteSliceFormatting(t *testing.T) {
-	// Test that WithRichBytes() provides hex dump format for byte slices
-	type DataWithBytes struct {
-		TraceID []byte
-		SpanID  []byte
+// TestEncoderConfigKnobs covers the EncoderConfig options users commonly
+// override when they embed this encoder in their own zap.Config.
+func TestEncoderConfigKnobs(t *testing.T) {
+	entry := zapcore.Entry{Message: "m", Level: zapcore.InfoLevel, Time: time.Unix(0, 0).UTC()}
+	fields := []zapcore.Field{zap.String("a", "1"), zap.String("b", "2")}
+	encode := func(t *testing.T, mutate func(*zapcore.EncoderConfig)) string {
+		t.Helper()
+		cfg := NewEncoderConfig()
+		cfg.TimeKey = zapcore.OmitKey
+		mutate(&cfg)
+		buf, err := NewEncoder(cfg).EncodeEntry(entry, fields)
+		require.NoError(t, err)
+		defer buf.Free()
+		return buf.String()
 	}
 
-	// Create test data with known byte patterns
-	data := DataWithBytes{
-		TraceID: []byte{
-			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-			0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-		},
-		SpanID: []byte{0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6, 0x07, 0x18},
-	}
-
-	enc := NewEncoder(NewEncoderConfig())
-	ent := zapcore.Entry{
-		Level:   zapcore.InfoLevel,
-		Message: "byte slice test",
-		Time:    time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC),
-	}
-
-	buf, err := enc.EncodeEntry(ent, []zapcore.Field{
-		zap.Reflect("data", data),
+	t.Run("ConsoleSeparator", func(t *testing.T) {
+		out := stripANSI(encode(t, func(c *zapcore.EncoderConfig) { c.ConsoleSeparator = " | " }))
+		assert.Contains(t, out, "a=1 | b=2")
 	})
-
-	assert.NoError(t, err)
-
-	output := buf.String()
-
-	// WithRichBytes provides hexdump-style output for []byte
-	// Should see hex bytes like "00 01 02 03 04 05 06 07"
-	assert.Contains(t, output, "00 01 02 03 04 05 06 07",
-		"TraceID should show hex dump format")
-	assert.Contains(t, output, "a1 b2 c3 d4 e5 f6 07 18",
-		"SpanID should show hex dump format")
-
-	// Should include hexdump-style comment format
-	assert.Contains(t, output, "// 00000000",
-		"Should include hexdump address prefix")
-}
-
-func TestByteSliceEdgeCases(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    interface{}
-		contains string
-	}{
-		{
-			name:     "Empty byte slice",
-			input:    struct{ Data []byte }{Data: []byte{}},
-			contains: "Data:", // Should handle empty slices gracefully
-		},
-		{
-			name:     "Single byte",
-			input:    struct{ Value []byte }{Value: []byte{0xff}},
-			contains: "ff",
-		},
-		{
-			name: "Nested struct with byte slices",
-			input: struct {
-				Outer struct {
-					Inner []byte
-				}
-			}{
-				Outer: struct{ Inner []byte }{
-					Inner: []byte{0xde, 0xad, 0xbe, 0xef},
-				},
-			},
-			contains: "de ad be ef",
-		},
-	}
-
-	enc := NewEncoder(NewEncoderConfig())
-	ent := zapcore.Entry{
-		Level:   zapcore.InfoLevel,
-		Message: "edge case test",
-		Time:    time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC),
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			buf, err := enc.EncodeEntry(ent, []zapcore.Field{
-				zap.Reflect("data", tt.input),
-			})
-			assert.NoError(t, err)
-			assert.Contains(t, buf.String(), tt.contains)
-		})
-	}
-}
-
-func TestOpenTelemetrySpanContext(t *testing.T) {
-	// Test with real OpenTelemetry trace.SpanContext
-	// This uses actual OTel types as a test-only dependency
-	traceID := [16]byte{
-		0x53, 0xae, 0x01, 0xc0, 0x1f, 0x35, 0xb7, 0x1e,
-		0xa7, 0x1b, 0x7b, 0xed, 0xef, 0x1c, 0x67, 0xdd,
-	}
-	spanID := [8]byte{0x9a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f, 0x7a, 0x8b}
-
-	// Create a span context using OTel's actual types
-	// Note: We can't directly construct trace.SpanContext with our bytes,
-	// so we'll create a wrapper struct that's representative
-	type OTelLikeContext struct {
-		TraceID [16]byte
-		SpanID  [8]byte
-		Flags   byte
-	}
-
-	spanCtx := OTelLikeContext{
-		TraceID: traceID,
-		SpanID:  spanID,
-		Flags:   1,
-	}
-
-	enc := NewEncoder(NewEncoderConfig())
-	ent := zapcore.Entry{
-		Level:   zapcore.InfoLevel,
-		Message: "OpenTelemetry trace context",
-		Time:    time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC),
-	}
-
-	buf, err := enc.EncodeEntry(ent, []zapcore.Field{
-		zap.Reflect("span_context", spanCtx),
+	t.Run("LineEnding", func(t *testing.T) {
+		out := encode(t, func(c *zapcore.EncoderConfig) { c.LineEnding = "\r\n" })
+		assert.True(t, strings.HasSuffix(out, "\r\n"))
 	})
-
-	assert.NoError(t, err)
-	output := buf.String()
-
-	// Print the actual output for documentation purposes
-	t.Logf("OpenTelemetry SpanContext output:\n%s", output)
-
-	// With custom WithDumpFunc formatters, byte arrays now show as hex strings!
-	assert.Contains(t, output, "TraceID:", "Should contain TraceID field")
-	assert.Contains(t, output, "SpanID:", "Should contain SpanID field")
-
-	// Verify hex string format (lowercase hex without 0x prefix)
-	assert.Contains(t, output, "\"53ae01c01f35b71ea71b7bedef1c67dd\"",
-		"TraceID should be formatted as hex string")
-	assert.Contains(t, output, "\"9a2b3c4d5e6f7a8b\"",
-		"SpanID should be formatted as hex string")
-
-	// Verify verbose individual byte format does NOT appear
-	assert.NotContains(t, output, "uint8",
-		"Should not show verbose uint8 array format")
-	assert.NotContains(t, output, "83,",
-		"Should not show individual decimal values")
-
-	// Note: This test verifies that fixed-size byte arrays ([16]byte, [8]byte)
-	// are now formatted as compact hex strings using dd.WithDumpFunc custom formatters.
+	t.Run("SkipLineEnding", func(t *testing.T) {
+		out := encode(t, func(c *zapcore.EncoderConfig) { c.SkipLineEnding = true })
+		assert.False(t, strings.HasSuffix(out, "\n"))
+	})
+	t.Run("OmitMessageKey", func(t *testing.T) {
+		out := stripANSI(encode(t, func(c *zapcore.EncoderConfig) { c.MessageKey = zapcore.OmitKey }))
+		assert.NotContains(t, out, "m ")
+		assert.Contains(t, out, "a=1")
+	})
+	t.Run("PlainLevelEncoder", func(t *testing.T) {
+		out := stripANSI(encode(t, func(c *zapcore.EncoderConfig) { c.EncodeLevel = zapcore.CapitalLevelEncoder }))
+		assert.Contains(t, out, "INFO")
+	})
+	t.Run("TimeFormat", func(t *testing.T) {
+		cfg := NewEncoderConfig()
+		cfg.EncodeTime = DefaultTimeEncoder(time.RFC3339)
+		buf, err := NewEncoder(cfg).EncodeEntry(entry, nil)
+		require.NoError(t, err)
+		defer buf.Free()
+		assert.Contains(t, stripANSI(buf.String()), "1970-01-01T00:00:00Z")
+	})
 }
 
-func TestByteArraySizes(t *testing.T) {
-	// Test various byte array sizes to verify they all format as hex strings
-	type TestStruct struct {
-		IPv4Address [4]byte  // 4 bytes - IPv4 addresses, CRC32
-		SpanID      [8]byte  // 8 bytes - OpenTelemetry SpanID
-		TraceID     [16]byte // 16 bytes - OpenTelemetry TraceID, UUID, MD5
-		SHA256      [32]byte // 32 bytes - SHA256 hash
-		SHA512      [64]byte // 64 bytes - SHA512 hash
-	}
+// TestSugaredLogger exercises the encoder the way sugared-logger users hold
+// it, including the documented FormattedStringValue helper.
+func TestSugaredLogger(t *testing.T) {
+	cfg := NewEncoderConfig()
+	cfg.TimeKey = zapcore.OmitKey
+	sink := &testBufferWriterSync{}
+	sugar := zap.New(zapcore.NewCore(NewEncoder(cfg), sink, zap.NewAtomicLevel())).Sugar()
 
-	testData := TestStruct{
-		IPv4Address: [4]byte{192, 168, 1, 1},
-		SpanID:      [8]byte{0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6, 0x07, 0x18},
-		TraceID:     [16]byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f},
-		SHA256:      [32]byte{0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0x9a, 0xbc, 0xde, 0xf0, 0x12, 0x34, 0x56, 0x78, 0x87, 0x65, 0x43, 0x21, 0x0f, 0xed, 0xcb, 0xa9, 0x98, 0x76, 0x54, 0x32, 0x10, 0xfe, 0xdc, 0xba},
-		SHA512: [64]byte{
-			0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
-			0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00,
-			0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00,
-			0x0f, 0x1e, 0x2d, 0x3c, 0x4b, 0x5a, 0x69, 0x78, 0x87, 0x96, 0xa5, 0xb4, 0xc3, 0xd2, 0xe1, 0xf0,
-		},
-	}
+	sugar.Infow("sugar message", "k", "v", "n", 1, "pretty", FormattedStringValue("a\nb"))
+	out := stripANSI(sink.buf.String())
+	assert.Contains(t, out, "sugar message")
+	assert.Contains(t, out, "k=v")
+	assert.Contains(t, out, "n=1")
+	assert.Contains(t, out, "pretty=a\n")
 
-	enc := NewEncoder(NewEncoderConfig())
-	ent := zapcore.Entry{
-		Level:   zapcore.InfoLevel,
-		Message: "byte array sizes test",
-		Time:    time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC),
-	}
+	sink.buf.Reset()
+	sugar.Errorw("failed", "err", errors.New("boom"))
+	assert.Contains(t, stripANSI(sink.buf.String()), "err=boom")
+}
 
-	buf, err := enc.EncodeEntry(ent, []zapcore.Field{
-		zap.Reflect("data", testData),
-	})
+// TestLoggerIntegration holds the encoder the way a production zap setup
+// does: AddCaller, AddStacktrace, named loggers and accumulated fields.
+func TestLoggerIntegration(t *testing.T) {
+	cfg := NewEncoderConfig()
+	cfg.TimeKey = zapcore.OmitKey
+	cfg.CallerKey = "C"
+	cfg.FunctionKey = "F"
+	sink := &testBufferWriterSync{}
+	logger := zap.New(zapcore.NewCore(NewEncoder(cfg), sink, zap.NewAtomicLevel()),
+		zap.AddCaller(), zap.AddStacktrace(zapcore.ErrorLevel))
 
-	assert.NoError(t, err)
-	output := buf.String()
-
-	t.Logf("Byte array sizes output:\n%s", output)
-
-	// Verify [4]byte formats as hex (IPv4Address)
-	assert.Contains(t, output, "\"c0a80101\"",
-		"[4]byte should be formatted as hex string (c0a80101 = 192.168.1.1)")
-
-	// Verify [8]byte formats as hex (SpanID)
-	assert.Contains(t, output, "\"a1b2c3d4e5f60718\"",
-		"[8]byte should be formatted as hex string")
-
-	// Verify [16]byte formats as hex (TraceID)
-	assert.Contains(t, output, "\"000102030405060708090a0b0c0d0e0f\"",
-		"[16]byte should be formatted as hex string")
-
-	// Verify [32]byte formats as hex (SHA256)
-	assert.Contains(t, output, "\"abcdef01234567899abcdef01234567887654321"+
-		"0fedcba998765432"+"10fedcba\"",
-		"[32]byte should be formatted as hex string")
-
-	// Verify [64]byte formats as hex (SHA512)
-	assert.Contains(t, output, "\"0123456789abcdeffedcba9876543210112233445566778899aabbccddee"+
-		"ff00ffeeddccbbaa99887766554433221100"+"0f1e2d3c4b5a69788796a5b4c3d2e1f0\"",
-		"[64]byte should be formatted as hex string")
-
-	// Verify verbose format does NOT appear for any size
-	assert.NotContains(t, output, "uint8",
-		"Should not show verbose uint8 array format for any byte array size")
-	assert.NotContains(t, output, "192,",
-		"Should not show individual decimal values (192 from IPv4Address)")
-	assert.NotContains(t, output, "171,",
-		"Should not show individual decimal values (171 = 0xab from SHA256)")
+	logger.Named("svc").Named("sub").With(zap.String("req", "42")).Error("kaboom")
+	out := stripANSI(sink.buf.String())
+	assert.Contains(t, out, "svc.sub")
+	assert.Contains(t, out, "_test.go:", "AddCaller should render this file")
+	assert.Contains(t, out, "TestLoggerIntegration", "FunctionKey should render the calling function")
+	assert.Contains(t, out, "req=42")
+	assert.Contains(t, out, "stacktrace=")
 }

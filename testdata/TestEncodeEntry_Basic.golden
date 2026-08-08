@@ -1,0 +1,2 @@
+<gray>4:33PM<r><green> <r><green>INF<r><green> <r><bold>TestLogger<r><green> <r><bold><green>><r><r><green> <r>log<green>\n<r>message<green> <r><green>complex=<r>-8+12i<green> <r><green>duration=<r>3h0m0s<green> <r><green>float=<r>-30000000000000<green> <r><green>int=<r>0<green> <r><green>string=<r>test_<green>\n<r>_value<green> <r><green>time=<r>2022-06-19T16:33:42Z
+<green>  ↳ strings<r><green>=[<r><green>\u00<r><green>1<r><green>b<r>1<green>, <r>2<green>\t<r><green>]<r>

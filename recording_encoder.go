@@ -55,7 +55,7 @@ func (r *recordingEncoder) AddBinary(key string, value []byte) {
 
 // AddByteString implements zapcore.ObjectEncoder
 func (r *recordingEncoder) AddByteString(key string, value []byte) {
-	r.fields = append(r.fields, zap.Binary(key, value))
+	r.fields = append(r.fields, zap.ByteString(key, value))
 }
 
 // AddBool implements zapcore.ObjectEncoder
