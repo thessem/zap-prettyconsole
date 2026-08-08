@@ -21,7 +21,9 @@ import (
 func TestEncodeEntry(t *testing.T) {
 	// Remove stacktrace line-numbers from this test file. Remember to manually
 	// test with -trimpath
-	rPath := regexp.MustCompile(`(github|\/|testing|runtime)[\w\.\\\/\-]*:\d+`)
+	// "@" appears in stacktrace paths when the toolchain itself lives in the
+	// module cache (e.g. golang.org/toolchain@v0.0.1-go1.21.13.linux-amd64)
+	rPath := regexp.MustCompile(`(github|\/|testing|runtime)[\w\.\\\/\-@]*:\d+`)
 
 	tests := []struct {
 		desc     string
@@ -450,7 +452,7 @@ func TestWith(t *testing.T) {
 	pretty1.Warn("wtf", zap.String("bark1", "barv1"))
 	expected := "\x1b[33mWRN\x1b[0m\x1b[33m \x1b[0m\x1b[1m\x1b[33m>\x1b[0m\x1b[0m\x1b[33m \x1b[0mwtf\x1b[33m \x1b[0m\x1b[33mbark1=\x1b[0mbarv1\x1b[33m \x1b[0m\x1b[33mfook1=\x1b[0mfoov1\n"
 	got := buf.buf.String()
-	assert.Equalf(t, expected, got, "Incorrect encoded entry, recieved: \n%v", got)
+	assert.Equalf(t, expected, got, "Incorrect encoded entry, received: \n%v", got)
 	buf.buf.Reset()
 
 	// Adding a namespace with With
@@ -461,7 +463,7 @@ func TestWith(t *testing.T) {
 	pretty11.Warn("wtf", zap.String("bark11", "barv11"))
 	expected = "\x1b[33mWRN\x1b[0m\x1b[33m \x1b[0m\x1b[1m\x1b[33m>\x1b[0m\x1b[0m\x1b[33m \x1b[0mwtf\x1b[33m \x1b[0m\x1b[33mfook1=\x1b[0mfoov1\n\x1b[33m  ↳ fook11\x1b[0m\x1b[33m.bark11=\x1b[0mbarv11\x1b[33m \x1b[0m\x1b[33m.bark12=\x1b[0mbarv12\n"
 	got = buf.buf.String()
-	assert.Equalf(t, expected, got, "Incorrect encoded entry, recieved: \n%v", got)
+	assert.Equalf(t, expected, got, "Incorrect encoded entry, received: \n%v", got)
 	buf.buf.Reset()
 
 	// Making sure pretty didn't get modified above
@@ -470,7 +472,7 @@ func TestWith(t *testing.T) {
 	pretty2.Warn("wtf", zap.String("bark2", "barv2"))
 	expected = "\x1b[33mWRN\x1b[0m\x1b[33m \x1b[0m\x1b[1m\x1b[33m>\x1b[0m\x1b[0m\x1b[33m \x1b[0mwtf\x1b[33m \x1b[0m\x1b[33mbark2=\x1b[0mbarv2\x1b[33m \x1b[0m\x1b[33mfook2=\x1b[0mfoov2\n"
 	got = buf.buf.String()
-	assert.Equalf(t, expected, got, "Incorrect encoded entry, recieved: \n%v", got)
+	assert.Equalf(t, expected, got, "Incorrect encoded entry, received: \n%v", got)
 	buf.buf.Reset()
 }
 

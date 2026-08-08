@@ -1,0 +1,23 @@
+name: PR Title
+
+# Release-please builds the changelog and picks version bumps from
+# conventional-commit messages, and squash-merges take their message from
+# the PR title, so titles need to follow the convention.
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+
+permissions:
+  pull-requests: read
+
+jobs:
+  check:
+    name: Conventional commit title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

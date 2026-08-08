@@ -1,10 +1,14 @@
+version = '2'
+
+# The v2 "standard" default set covers errcheck, govet, ineffassign,
+# staticcheck (which now includes gosimple) and unused.
 [linters]
 enable = [
-    "errcheck",
-    "gosimple",
-    "govet",
-    "ineffassign",
-    "staticcheck",
-    "unused",
-    "gofumpt",
+    'errorlint',
+    'misspell',
+]
+
+[formatters]
+enable = [
+    'gofumpt',
 ]

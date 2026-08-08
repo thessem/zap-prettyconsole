@@ -1,6 +1,6 @@
 module github.com/thessem/zap-prettyconsole
 
-go 1.18
+go 1.20
 
 require (
 	github.com/Code-Hex/dd v1.1.0
