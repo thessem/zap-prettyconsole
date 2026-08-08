@@ -272,7 +272,7 @@ func TestArraysOfEverything(t *testing.T) {
 	assert.NotContains(t, out, `\u001b`)
 	assert.Contains(t, out, "e1")
 	assert.Contains(t, out, "e2")
-	assert.Contains(t, out, "N: 7") // AppendReflected falls through to dd
+	assert.Contains(t, out, "N: 7") // AppendReflected falls through to the reflection dumper
 	assert.Contains(t, out, "nested_empty=[[]]")
 }
 

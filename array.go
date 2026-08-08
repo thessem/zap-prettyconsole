@@ -202,7 +202,7 @@ func (e *prettyConsoleEncoder) AppendReflected(value interface{}) error {
 	}
 	if l-enc.buf.Len() == 0 {
 		// User-supplied reflectedEncoder is absent or a no-op. Fall back
-		// to dd
+		// to the reflection dumper
 		if err := defaultReflectedEncoder(iw).Encode(value); err != nil {
 			return err
 		}

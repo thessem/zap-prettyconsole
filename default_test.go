@@ -96,7 +96,7 @@ func TestEncoderFallbacks(t *testing.T) {
 	assert.Contains(t, out, "dur=1m30s")                    // AddDuration falls back to Duration.String
 	assert.Contains(t, out, "durs=[1000000000]")            // AppendDuration falls back to nanoseconds
 	assert.Contains(t, out, "times=[2022-06-19T16:33:42Z]") // AppendTime falls back to RFC3339
-	assert.Contains(t, out, "A: 1")                         // AddReflected falls back to dd
+	assert.Contains(t, out, "A: 1")                         // AddReflected falls back to the reflection dumper
 }
 
 func TestReflectedTimeFormatting(t *testing.T) {
@@ -137,7 +137,7 @@ func TestReflectedTimeFormatting(t *testing.T) {
 }
 
 func TestReflectedByteSliceFormatting(t *testing.T) {
-	// Test that WithRichBytes() provides hex dump format for byte slices
+	// Test that byte slices get hex dump formatting
 	type DataWithBytes struct {
 		TraceID []byte
 		SpanID  []byte
@@ -167,7 +167,7 @@ func TestReflectedByteSliceFormatting(t *testing.T) {
 
 	output := buf.String()
 
-	// WithRichBytes provides hexdump-style output for []byte
+	// Byte slices get hexdump-style output
 	// Should see hex bytes like "00 01 02 03 04 05 06 07"
 	assert.Contains(t, output, "00 01 02 03 04 05 06 07",
 		"TraceID should show hex dump format")
@@ -269,7 +269,7 @@ func TestOpenTelemetrySpanContext(t *testing.T) {
 	// Print the actual output for documentation purposes
 	t.Logf("OpenTelemetry SpanContext output:\n%s", output)
 
-	// With custom WithDumpFunc formatters, byte arrays now show as hex strings!
+	// Byte arrays show as hex strings
 	assert.Contains(t, output, "TraceID:", "Should contain TraceID field")
 	assert.Contains(t, output, "SpanID:", "Should contain SpanID field")
 
@@ -286,7 +286,7 @@ func TestOpenTelemetrySpanContext(t *testing.T) {
 		"Should not show individual decimal values")
 
 	// Note: This test verifies that fixed-size byte arrays ([16]byte, [8]byte)
-	// are now formatted as compact hex strings using dd.WithDumpFunc custom formatters.
+	// are formatted as compact hex strings by the reflection dumper.
 }
 
 func TestByteArraySizes(t *testing.T) {

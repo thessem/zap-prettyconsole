@@ -108,10 +108,10 @@ This encoder was inspired by trying to parse multiple `github.com/pkg/errors/` e
 I am a big fan of error wrapping and error stacktraces, I am not a fan of needing to copy text out of my terminal to see what happened.
 ![errors](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/Errors.png?raw=true)
 
-When objects that do not satisfy `ObjectMarshaler` are logged, zap-prettyconsole will use reflection (via the delightful [dd][dd] library) to print it instead:
+When objects that do not satisfy `ObjectMarshaler` are logged, zap-prettyconsole will use its built-in reflection dumper to print them instead. It renders structs (including unexported fields), sorted maps, timestamps and byte dumps, detects cycles, and bounds recursion depth so surprising values can never hang or crash your logging:
 ![reflection](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/Reflection.png?raw=true)
 
-Fixed-size byte arrays (like `[16]byte` and `[8]byte`) are automatically formatted as compact hex strings, making them ideal for displaying OpenTelemetry trace IDs, span IDs, and other binary identifiers:
+Fixed-size byte arrays (of any size) are automatically formatted as compact hex strings, making them ideal for displaying OpenTelemetry trace IDs, span IDs, and other binary identifiers:
 ![otel_tracing](https://github.com/thessem/zap-prettyconsole/blob/main/internal/readme/images/OTelTracing.png?raw=true)
 
 Supported byte array sizes include `[4]byte`, `[8]byte`, `[16]byte`, `[32]byte`, and `[64]byte` - covering common use cases like IPv4 addresses, UUIDs, trace IDs, and cryptographic hashes (MD5, SHA256, SHA512).
@@ -164,4 +164,3 @@ Released under the [MIT License](LICENSE.txt)
 
 [zap]: https://github.com/uber-go/zap
 [zap advanced configuration]: https://pkg.go.dev/go.uber.org/zap#example-package-AdvancedConfiguration
-[dd]: https://github.com/Code-Hex/dd
