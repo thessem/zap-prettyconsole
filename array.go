@@ -94,10 +94,14 @@ func (e *prettyConsoleEncoder) AppendUint64(u uint64) {
 func (e *prettyConsoleEncoder) AppendDuration(duration time.Duration) {
 	e.addSeparator()
 	cur := e.buf.Len()
-	e.cfg.EncodeDuration(duration, e)
+	// The callback appends too, and must not repeat the separator
+	e.inList = false
+	if e.cfg.EncodeDuration != nil {
+		e.cfg.EncodeDuration(duration, e)
+	}
 	if cur == e.buf.Len() {
-		// User-supplied EncodeDuration is a no-op. Fall back to nanoseconds to keep
-		// JSON valid.
+		// User-supplied EncodeDuration is absent or a no-op. Fall back to
+		// nanoseconds to keep JSON valid.
 		e.buf.AppendInt(int64(duration))
 	}
 
@@ -108,9 +112,15 @@ func (e *prettyConsoleEncoder) AppendDuration(duration time.Duration) {
 func (e *prettyConsoleEncoder) AppendTime(t time.Time) {
 	e.addSeparator()
 	cur := e.buf.Len()
-	e.cfg.EncodeTime(t, e)
+	// The callback appends too, and must not repeat the separator. It also
+	// emits its own ANSI colour codes (e.g. DefaultTimeEncoder), which the
+	// escaping appender would mangle, so hand it the raw one.
+	e.inList = false
+	if e.cfg.EncodeTime != nil {
+		e.cfg.EncodeTime(t, rawStringAppender{e})
+	}
 	if cur == e.buf.Len() {
-		// User-supplied EncodeTime is a no-op. Fall back to RFC3339
+		// User-supplied EncodeTime is absent or a no-op. Fall back to RFC3339
 		e.buf.AppendTime(t, time.RFC3339)
 	}
 
@@ -185,11 +195,14 @@ func (e *prettyConsoleEncoder) AppendReflected(value interface{}) error {
 		indent:     enc.namespaceIndent,
 		lineEnding: []byte(e.cfg.LineEnding),
 	}
-	if err := e.cfg.NewReflectedEncoder(iw).Encode(value); err != nil {
-		return err
+	if e.cfg.NewReflectedEncoder != nil {
+		if err := e.cfg.NewReflectedEncoder(iw).Encode(value); err != nil {
+			return err
+		}
 	}
 	if l-enc.buf.Len() == 0 {
-		// User-supplied reflectedEncoder is a no-op. Fall back to dd
+		// User-supplied reflectedEncoder is absent or a no-op. Fall back
+		// to dd
 		if err := defaultReflectedEncoder(iw).Encode(value); err != nil {
 			return err
 		}

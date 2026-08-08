@@ -1,0 +1,9 @@
+<gray>4:33PM<r><green> <r><green>INF<r><green> <r><bold><green>><r><r><green> <r>test message<green> <r><green>test_string=<r>test_message
+<green>  ↳ colours<r><green>=<r><r><red>RED STRING!<r><red>
+<green>  ↳ namespace<r><green>.mdb<r><green>=<r>db.users.find({
+                  	name: "James"
+                  });
+             <green>.sql<r><green>=<r>SELECT * FROM
+                  	users
+                  WHERE
+                  	name = 'James'

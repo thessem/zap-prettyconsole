@@ -1,0 +1,17 @@
+<gray>4:33PM<r><red> <r><red>ERR<r><red> <r><bold><red>><r><r><red> <r>test message
+<red>  ↳ error<r><red>=<r>error with context
+          <red>.cause<r><red>=<r>cause 1
+<red>  ↳ error<r><red>=<r>errors with context
+          <red>.cause.0<r><red>=<r>cause 1
+          <red>.cause.1<r><red>=<r>cause 2
+<red>  ↳ error<r><red>.cause.0<r><red>=<r>joined cause 1
+         <red>.cause.1<r><red>=<r>joined cause 2
+<red>  ↳ error<r><red>=<r>Joined and fmt
+          <red>.cause.0<r><red>.cause.0<r><red>=<r>joined 1
+                  <red>.cause.1<r><red>=<r>joined 2
+          <red>.cause.1<r><red>=<r>fmt error
+<red>  ↳ nil_cause_error<r><red>=<r>Error has nil cause
+<red>  ↳ <r><red>stacktrace=<r>github.com/thessem/zap-prettyconsole.TestEncodeEntryErrors
+               	/<some_file>:<line_number>
+               testing.tRunner
+               	/<some_file>:<line_number>

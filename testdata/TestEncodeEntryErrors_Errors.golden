@@ -1,0 +1,45 @@
+<gray>4:33PM<r><red> <r><red>ERR<r><red> <r><bold><red>><r><r><red> <r>test message<red> <r><red>named_stracktrace=<r>github.com/thessem/zap-prettyconsole.TestEncodeEntryErrors<red>\n<r><red>\t<r>/<some_file>:<line_number><red>\n<r>testing.tRunner<red>\n<r><red>\t<r>/<some_file>:<line_number>
+<red>  ↳ error<r><red>=<r>something <red>\n<r>went wrong
+<red>  ↳ nested<r><red>.cause<r><red>=<r>error with stacktrace
+                 <red>.cause<r><red>.cause<r><red>=<r>error with 2 causes
+                              <red>.cause<r><red>.cause.0<r><red>=<r>cause 1
+                                             <red>.stacktrace=<r>github.com/thessem/zap-prettyconsole.TestEncodeEntryErrors
+                                                         	/<some_file>:<line_number>
+                                                         testing.tRunner
+                                                         	/<some_file>:<line_number>
+                                                         runtime.goexit
+                                                         	/<some_file>:<line_number>
+                                    <red>.cause.1<r><red>.cause<r><red>=<r>deeper error with two causes
+                                                   <red>.cause<r><red>.cause.0<r><red>=<r>deeper cause 1
+                                                         <red>.cause.1<r><red>=<r>deeper cause 2
+                                            <red>.stacktrace=<r>github.com/thessem/zap-prettyconsole.TestEncodeEntryErrors
+                                                        	/<some_file>:<line_number>
+                                                        testing.tRunner
+                                                        	/<some_file>:<line_number>
+                                                        runtime.goexit
+                                                        	/<some_file>:<line_number>
+                       <red>.stacktrace=<r>github.com/thessem/zap-prettyconsole.TestEncodeEntryErrors
+                                   	/<some_file>:<line_number>
+                                   testing.tRunner
+                                   	/<some_file>:<line_number>
+                                   runtime.goexit
+                                   	/<some_file>:<line_number>
+          <red>.stacktrace=<r>github.com/thessem/zap-prettyconsole.TestEncodeEntryErrors
+                      	/<some_file>:<line_number>
+                      testing.tRunner
+                      	/<some_file>:<line_number>
+                      runtime.goexit
+                      	/<some_file>:<line_number>
+<red>  ↳ nil_panic_PANIC_DISPLAYING_ERROR<r><red>=<r>PANIC=Panic!
+<red>  ↳ normal_panic<r><nil>
+<red>  ↳ stack<r><red>=<r>an error with a stacktrace has occurred
+          <red>.stacktrace=<r>github.com/thessem/zap-prettyconsole.TestEncodeEntryErrors
+                      	/<some_file>:<line_number>
+                      testing.tRunner
+                      	/<some_file>:<line_number>
+                      runtime.goexit
+                      	/<some_file>:<line_number>
+<red>  ↳ <r><red>stacktrace=<r>github.com/thessem/zap-prettyconsole.TestEncodeEntryErrors
+               	/<some_file>:<line_number>
+               testing.tRunner
+               	/<some_file>:<line_number>

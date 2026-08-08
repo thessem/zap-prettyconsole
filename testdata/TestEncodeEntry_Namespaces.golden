@@ -1,0 +1,5 @@
+<gray>4:33PM<r><green> <r><green>INF<r><green> <r><bold><green>><r><r><green> <r>test message<green> <r><green>test_string=<r>test_message
+<green>  ↳ namespace<r><green>.string2=<r>val2<green> <r><green>.string3=<r>val3
+             <green>.namespace2<r><green>.string4=<r>val4<green> <r><green>.string5=<r>val5
+                        <green>.namespace3<r><green>.namespace4<r><green>.string6=<r>val6<green> <r><green>.string7=<r>val7
+                                              <green>.namespace5<r>

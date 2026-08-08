@@ -1,0 +1,10 @@
+<gray>4:33PM<r><green> <r><green>INF<r><green> <r><bold><green>><r><r><green> <r>test message
+<green>  ↳ object<r><green>.1<r><green>.1<r><green>.1_leading_value=<r>leading_value
+              <green>.2<r><green>.1=<r>string
+                <green>.2<r><green>=[<r>1<green>, <r>2<green>, <r>3<green>, <r>4<green>]<r>
+                <green>.3<r><green>=<r>2.000000
+                <green>.4<r><green>.r1<r><green>=<r>[]string{
+                        "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8",
+                        "r9", "r10",
+                      }<green>
+            <r><green>.2=<r>trailing_value
