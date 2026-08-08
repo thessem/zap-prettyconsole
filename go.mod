@@ -1,6 +1,6 @@
 module github.com/thessem/zap-prettyconsole
 
-go 1.20
+go 1.23
 
 require (
 	github.com/pkg/errors v0.9.1
