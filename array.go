@@ -29,7 +29,7 @@ func (e *prettyConsoleEncoder) AppendBool(b bool) {
 	e.buf.AppendBool(b)
 
 	e.inList = true
-	e.listSep = e._listSepComma
+	e.setListSep(e._listSepComma)
 }
 
 func (e *prettyConsoleEncoder) AppendByteString(bytes []byte) {
@@ -37,7 +37,7 @@ func (e *prettyConsoleEncoder) AppendByteString(bytes []byte) {
 	e.appendSafeByte(bytes)
 
 	e.inList = true
-	e.listSep = e._listSepComma
+	e.setListSep(e._listSepComma)
 }
 
 func (e *prettyConsoleEncoder) appendComplex(c complex128, precision int) {
@@ -56,7 +56,7 @@ func (e *prettyConsoleEncoder) appendComplex(c complex128, precision int) {
 	e.buf.AppendByte('i')
 
 	e.inList = true
-	e.listSep = e._listSepComma
+	e.setListSep(e._listSepComma)
 }
 
 func (e *prettyConsoleEncoder) appendFloat(f float64, precision int) {
@@ -64,7 +64,7 @@ func (e *prettyConsoleEncoder) appendFloat(f float64, precision int) {
 	e.buf.AppendFloat(f, precision)
 
 	e.inList = true
-	e.listSep = e._listSepComma
+	e.setListSep(e._listSepComma)
 }
 
 func (e *prettyConsoleEncoder) AppendInt64(i int64) {
@@ -72,7 +72,7 @@ func (e *prettyConsoleEncoder) AppendInt64(i int64) {
 	e.buf.AppendInt(i)
 
 	e.inList = true
-	e.listSep = e._listSepComma
+	e.setListSep(e._listSepComma)
 }
 
 func (e *prettyConsoleEncoder) AppendString(s string) {
@@ -80,7 +80,7 @@ func (e *prettyConsoleEncoder) AppendString(s string) {
 	e.addSafeString(s)
 
 	e.inList = true
-	e.listSep = e._listSepComma
+	e.setListSep(e._listSepComma)
 }
 
 func (e *prettyConsoleEncoder) AppendUint64(u uint64) {
@@ -88,7 +88,7 @@ func (e *prettyConsoleEncoder) AppendUint64(u uint64) {
 	e.buf.AppendUint(u)
 
 	e.inList = true
-	e.listSep = e._listSepComma
+	e.setListSep(e._listSepComma)
 }
 
 func (e *prettyConsoleEncoder) AppendDuration(duration time.Duration) {
@@ -106,7 +106,7 @@ func (e *prettyConsoleEncoder) AppendDuration(duration time.Duration) {
 	}
 
 	e.inList = true
-	e.listSep = e._listSepComma
+	e.setListSep(e._listSepComma)
 }
 
 func (e *prettyConsoleEncoder) AppendTime(t time.Time) {
@@ -125,7 +125,7 @@ func (e *prettyConsoleEncoder) AppendTime(t time.Time) {
 	}
 
 	e.inList = true
-	e.listSep = e._listSepComma
+	e.setListSep(e._listSepComma)
 }
 
 func (e *prettyConsoleEncoder) AppendArray(marshaler zapcore.ArrayMarshaler) error {
@@ -141,9 +141,7 @@ func (e *prettyConsoleEncoder) AppendArray(marshaler zapcore.ArrayMarshaler) err
 	}
 	if bytes.ContainsRune(enc.buf.Bytes()[l:], '\n') {
 		enc.buf.AppendString(e.cfg.LineEnding)
-		for ii := 0; ii < enc.namespaceIndent-1; ii++ {
-			enc.buf.AppendByte(' ')
-		}
+		appendSpaces(enc.buf, enc.namespaceIndent-1)
 	}
 	enc.colorizeAtLevel("]")
 
@@ -151,7 +149,7 @@ func (e *prettyConsoleEncoder) AppendArray(marshaler zapcore.ArrayMarshaler) err
 	putPrettyConsoleEncoder(enc)
 
 	e.inList = true
-	e.listSep = e._listSepComma
+	e.setListSep(e._listSepComma)
 	return nil
 }
 
@@ -169,9 +167,7 @@ func (e *prettyConsoleEncoder) AppendObject(marshaler zapcore.ObjectMarshaler) e
 	}
 	if bytes.ContainsRune(enc.buf.Bytes()[l:], '\n') {
 		enc.buf.AppendString(e.cfg.LineEnding)
-		for ii := 0; ii < enc.namespaceIndent-1; ii++ {
-			enc.buf.AppendByte(' ')
-		}
+		appendSpaces(enc.buf, enc.namespaceIndent-1)
 	}
 	enc.colorizeAtLevel("}")
 
@@ -179,7 +175,7 @@ func (e *prettyConsoleEncoder) AppendObject(marshaler zapcore.ObjectMarshaler) e
 	putPrettyConsoleEncoder(enc)
 
 	e.inList = true
-	e.listSep = e._listSepComma
+	e.setListSep(e._listSepComma)
 	return nil
 }
 
@@ -212,6 +208,6 @@ func (e *prettyConsoleEncoder) AppendReflected(value interface{}) error {
 	putPrettyConsoleEncoder(enc)
 
 	e.inList = true
-	e.listSep = e._listSepComma
+	e.setListSep(e._listSepComma)
 	return nil
 }

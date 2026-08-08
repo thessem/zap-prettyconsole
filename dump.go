@@ -1,10 +1,10 @@
 package prettyconsole
 
 import (
+	"bytes"
 	"io"
 	"math"
 	"reflect"
-	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -40,13 +40,29 @@ var (
 )
 
 type dumpState struct {
-	buf     []byte
-	depth   int
-	visited map[uintptr]struct{}
+	buf   []byte
+	depth int
+	// visited is a stack of container addresses on the current dump path.
+	// Depth is bounded by maxDumpDepth, so a linear scan beats a map.
+	visited []uintptr
+	// kbuf and entries are scratch space for sorting map keys; both grow
+	// once and are reused stack-style across nested maps.
+	kbuf    []byte
+	entries []mapEntry
+}
+
+type mapEntry struct {
+	off, end int // rendered key bytes within kbuf
+	val      reflect.Value
 }
 
 var dumpPool = sync.Pool{New: func() interface{} {
-	return &dumpState{buf: make([]byte, 0, 256), visited: make(map[uintptr]struct{})}
+	return &dumpState{
+		buf:     make([]byte, 0, 256),
+		visited: make([]uintptr, 0, 16),
+		kbuf:    make([]byte, 0, 64),
+		entries: make([]mapEntry, 0, 8),
+	}
 }}
 
 // dumpValue writes a readable representation of v to w.
@@ -55,9 +71,9 @@ func dumpValue(w io.Writer, v interface{}) error {
 	defer func() {
 		d.buf = d.buf[:0]
 		d.depth = 0
-		for k := range d.visited {
-			delete(d.visited, k)
-		}
+		d.visited = d.visited[:0]
+		d.kbuf = d.kbuf[:0]
+		d.entries = d.entries[:0]
 		dumpPool.Put(d)
 	}()
 
@@ -66,8 +82,10 @@ func dumpValue(w io.Writer, v interface{}) error {
 	} else {
 		rv := reflect.ValueOf(v)
 		// Make the value addressable so unexported struct fields further
-		// down can be read (see bypass).
-		if rv.Kind() != reflect.Ptr && rv.CanInterface() {
+		// down can be read (see bypass) - but only when the type can
+		// actually contain an unexported timestamp, so the common case
+		// skips the copy.
+		if rv.Kind() != reflect.Ptr && rv.CanInterface() && typeNeedsAddr(rv.Type()) {
 			pv := reflect.New(rv.Type())
 			pv.Elem().Set(rv)
 			rv = pv.Elem()
@@ -198,14 +216,17 @@ func (d *dumpState) pointer(v reflect.Value) {
 // is already there (a cycle). Path-based tracking means diamonds - the
 // same value reachable twice without a loop - still print in full.
 func (d *dumpState) enter(p uintptr) bool {
-	if _, ok := d.visited[p]; ok {
-		return true
+	for _, q := range d.visited {
+		if q == p {
+			return true
+		}
 	}
-	d.visited[p] = struct{}{}
+	d.visited = append(d.visited, p)
 	return false
 }
 
-func (d *dumpState) leave(p uintptr) { delete(d.visited, p) }
+// leave pops the most recent container; enter/leave calls strictly nest.
+func (d *dumpState) leave(uintptr) { d.visited = d.visited[:len(d.visited)-1] }
 
 // sequence renders slices and arrays. Byte sequences get hex treatment:
 // arrays as one compact hex string (they are almost always IDs, hashes and
@@ -384,30 +405,44 @@ func (d *dumpState) mapValue(v reflect.Value) {
 	}
 
 	// Render each key up front so entries can be ordered
-	// deterministically, whatever the key type.
-	type entry struct {
-		key string
-		val reflect.Value
-	}
-	entries := make([]entry, 0, v.Len())
+	// deterministically, whatever the key type. Keys are rendered through
+	// the main buffer, then moved into the pooled kbuf scratch; base
+	// offsets make this safe for nested maps.
+	kbase, ebase := len(d.kbuf), len(d.entries)
+	defer func() {
+		d.kbuf = d.kbuf[:kbase]
+		d.entries = d.entries[:ebase]
+	}()
 	iter := v.MapRange()
 	for iter.Next() {
-		sub := dumpState{buf: make([]byte, 0, 16), visited: d.visited, depth: d.depth}
-		sub.value(iter.Key())
-		entries = append(entries, entry{key: string(sub.buf), val: iter.Value()})
+		mark := len(d.buf)
+		d.value(iter.Key())
+		off := len(d.kbuf)
+		d.kbuf = append(d.kbuf, d.buf[mark:]...)
+		d.buf = d.buf[:mark]
+		d.entries = append(d.entries, mapEntry{off: off, end: len(d.kbuf), val: iter.Value()})
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].key < entries[j].key })
+	entries := d.entries[ebase:]
+	// Insertion sort by rendered key: log maps are small, and this avoids
+	// the allocations sort.Slice makes for its swapper and closure.
+	for i := 1; i < len(entries); i++ {
+		for j := i; j > 0 && bytes.Compare(
+			d.kbuf[entries[j].off:entries[j].end],
+			d.kbuf[entries[j-1].off:entries[j-1].end]) < 0; j-- {
+			entries[j], entries[j-1] = entries[j-1], entries[j]
+		}
+	}
 
 	if len(entries) <= listBreakLen {
 		mark := len(d.buf)
 		d.byte_('{')
-		for i, e := range entries {
+		for i := range entries {
 			if i > 0 {
 				d.str(", ")
 			}
-			d.str(e.key)
+			d.buf = append(d.buf, d.kbuf[entries[i].off:entries[i].end]...)
 			d.str(": ")
-			d.value(e.val)
+			d.value(entries[i].val)
 		}
 		d.byte_('}')
 		if d.inlineFits(mark) {
@@ -417,16 +452,32 @@ func (d *dumpState) mapValue(v reflect.Value) {
 	}
 	d.byte_('{')
 	d.depth++
-	for _, e := range entries {
+	for i := range entries {
 		d.newline()
-		d.str(e.key)
+		d.buf = append(d.buf, d.kbuf[entries[i].off:entries[i].end]...)
 		d.str(": ")
-		d.value(e.val)
+		d.value(entries[i].val)
 		d.byte_(',')
 	}
 	d.depth--
 	d.newline()
 	d.byte_('}')
+}
+
+// fieldNameCache caches struct field names per type: reflect.Type.Field
+// allocates a StructField copy on every call.
+var fieldNameCache sync.Map // reflect.Type -> []string
+
+func fieldNames(t reflect.Type) []string {
+	if names, ok := fieldNameCache.Load(t); ok {
+		return names.([]string)
+	}
+	names := make([]string, t.NumField())
+	for i := range names {
+		names[i] = t.Field(i).Name
+	}
+	fieldNameCache.Store(t, names)
+	return names
 }
 
 func (d *dumpState) structValue(v reflect.Value) {
@@ -436,11 +487,12 @@ func (d *dumpState) structValue(v reflect.Value) {
 		d.str("{}")
 		return
 	}
+	names := fieldNames(t)
 	d.byte_('{')
 	d.depth++
-	for i := 0; i < t.NumField(); i++ {
+	for i, name := range names {
 		d.newline()
-		d.str(t.Field(i).Name)
+		d.str(name)
 		d.str(": ")
 		d.value(v.Field(i))
 		d.byte_(',')
@@ -448,4 +500,42 @@ func (d *dumpState) structValue(v reflect.Value) {
 	d.depth--
 	d.newline()
 	d.byte_('}')
+}
+
+// typeNeedsAddrCache caches whether a type can reach a time.Time-shaped
+// struct through fields the bypass could serve (see typeNeedsAddr).
+var typeNeedsAddrCache sync.Map // reflect.Type -> bool
+
+// typeNeedsAddr reports whether dumping t could hit the unexported-
+// timestamp bypass, which needs an addressable value. Interfaces and map
+// contents are excluded: values reached through them are never
+// addressable, so the top-level copy would not help anyway.
+func typeNeedsAddr(t reflect.Type) bool {
+	if v, ok := typeNeedsAddrCache.Load(t); ok {
+		return v.(bool)
+	}
+	res := typeNeedsAddrWalk(t, make(map[reflect.Type]bool))
+	typeNeedsAddrCache.Store(t, res)
+	return res
+}
+
+func typeNeedsAddrWalk(t reflect.Type, seen map[reflect.Type]bool) bool {
+	if seen[t] {
+		return false
+	}
+	seen[t] = true
+	switch t.Kind() {
+	case reflect.Struct:
+		if t.ConvertibleTo(timeType) {
+			return true
+		}
+		for i := 0; i < t.NumField(); i++ {
+			if typeNeedsAddrWalk(t.Field(i).Type, seen) {
+				return true
+			}
+		}
+	case reflect.Ptr, reflect.Slice, reflect.Array:
+		return typeNeedsAddrWalk(t.Elem(), seen)
+	}
+	return false
 }

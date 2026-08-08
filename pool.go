@@ -35,6 +35,7 @@ func putPrettyConsoleEncoder(e *prettyConsoleEncoder) {
 	e.namespaceIndent = 0
 	e.inList = false
 	e.listSep = ""
+	e.listSepIndent = -1
 	e._listSepSpace = ""
 	e._listSepComma = ""
 
