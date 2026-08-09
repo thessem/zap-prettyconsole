@@ -54,7 +54,7 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 		putPrettyConsoleEncoder(enc)
 
 		e.inList = true
-		e.listSep = e.cfg.LineEnding + strings.Repeat(" ", e.namespaceIndent)
+		e.setIndentSep()
 	}()
 
 	var causes []error

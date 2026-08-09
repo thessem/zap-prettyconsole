@@ -32,11 +32,15 @@ const (
 func DefaultTimeEncoder(format string) func(time.Time, zapcore.PrimitiveArrayEncoder) {
 	return func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 		buf := _bufferPoolGet()
-		colorize(buf, t.Format(format), strconv.Itoa(colorDarkGray))
+		buf.AppendString(ansiDarkGray)
+		buf.AppendTime(t, format)
+		buf.AppendString(ansiReset)
 		enc.AppendString(buf.String())
 		buf.Free()
 	}
 }
+
+const ansiDarkGray = "\x1b[90m"
 
 func defaultDurationEncoder(dur time.Duration, enc zapcore.PrimitiveArrayEncoder) {
 	enc.AppendString(dur.String())
@@ -56,36 +60,33 @@ var defaultColours = [10][]string{
 	zapcore.PanicLevel + defaultColourOffset:     {strconv.Itoa(colorRed), strconv.Itoa(colorBold)},
 }
 
-func defaultLevelEncoder(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
-	var str string
-
-	switch l {
-	// DIY trace level
-	case zapcore.DebugLevel - 1:
-		str = "TRC"
-	case zapcore.DebugLevel:
-		str = "DBG"
-	case zapcore.InfoLevel:
-		str = "INF"
-	case zapcore.WarnLevel:
-		str = "WRN"
-	case zapcore.ErrorLevel:
-		str = "ERR"
-	case zapcore.FatalLevel:
-		str = "FTL"
-	case zapcore.DPanicLevel:
-		str = "DPNC"
-	case zapcore.PanicLevel:
-		str = "PNC"
-	default:
-		l = zapcore.PanicLevel
-		str = "???"
+// defaultLevelLabels holds the fully coloured label for each known level,
+// so encoding a level is a single precomputed append.
+var defaultLevelLabels = func() (labels [len(defaultColours)]string) {
+	names := map[zapcore.Level]string{
+		zapcore.DebugLevel - 1: "TRC", // DIY trace level
+		zapcore.DebugLevel:     "DBG",
+		zapcore.InfoLevel:      "INF",
+		zapcore.WarnLevel:      "WRN",
+		zapcore.ErrorLevel:     "ERR",
+		zapcore.FatalLevel:     "FTL",
+		zapcore.DPanicLevel:    "DPNC",
+		zapcore.PanicLevel:     "PNC",
 	}
+	for l, name := range names {
+		labels[l+defaultColourOffset] = levelColourPrefixes[l+defaultColourOffset] + name + ansiReset
+	}
+	return labels
+}()
 
-	buf := _bufferPoolGet()
-	colorize(buf, str, defaultColours[l+defaultColourOffset]...)
-	enc.AppendString(buf.String())
-	buf.Free()
+var unknownLevelLabel = levelColourPrefixes[zapcore.PanicLevel+defaultColourOffset] + "???" + ansiReset
+
+func defaultLevelEncoder(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
+	if idx := int(l) + defaultColourOffset; idx >= 0 && idx < len(defaultLevelLabels) && defaultLevelLabels[idx] != "" {
+		enc.AppendString(defaultLevelLabels[idx])
+		return
+	}
+	enc.AppendString(unknownLevelLabel)
 }
 
 func defaultCallerEncoder(caller zapcore.EntryCaller, enc zapcore.PrimitiveArrayEncoder) {

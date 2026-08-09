@@ -3,7 +3,6 @@ package prettyconsole
 import (
 	"bytes"
 	"encoding/base64"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -44,9 +43,7 @@ func (e *prettyConsoleEncoder) OpenNamespace(key string) {
 	} else {
 		if e.inList {
 			e.buf.AppendString(e.cfg.LineEnding)
-			for ii := 0; ii < e.namespaceIndent; ii++ {
-				e.buf.AppendByte(' ')
-			}
+			appendSpaces(e.buf, e.namespaceIndent)
 		}
 		if len(key) > 0 {
 			e.colorizeAtLevel(e.keyPrefix + key)
@@ -54,7 +51,7 @@ func (e *prettyConsoleEncoder) OpenNamespace(key string) {
 		e.namespaceIndent += 1 + len(key)
 	}
 	e.inList = false
-	e.listSep = e._listSepSpace
+	e.setListSep(e._listSepSpace)
 	e.keyPrefix = "."
 }
 
@@ -70,7 +67,7 @@ func (e *prettyConsoleEncoder) AddObject(key string, marshaler zapcore.ObjectMar
 	putPrettyConsoleEncoder(enc)
 
 	e.inList = true
-	e.listSep = e.cfg.LineEnding + strings.Repeat(" ", e.namespaceIndent)
+	e.setIndentSep()
 	return nil
 }
 
@@ -87,9 +84,7 @@ func (e *prettyConsoleEncoder) AddArray(key string, marshaler zapcore.ArrayMarsh
 	}
 	if bytes.ContainsRune(enc.buf.Bytes()[l:], '\n') {
 		enc.buf.AppendString(e.cfg.LineEnding)
-		for ii := 0; ii < enc.namespaceIndent-1; ii++ {
-			enc.buf.AppendByte(' ')
-		}
+		appendSpaces(enc.buf, enc.namespaceIndent-1)
 	}
 	enc.colorizeAtLevel("]")
 
@@ -97,7 +92,7 @@ func (e *prettyConsoleEncoder) AddArray(key string, marshaler zapcore.ArrayMarsh
 	putPrettyConsoleEncoder(enc)
 
 	e.inList = true
-	e.listSep = e.cfg.LineEnding + strings.Repeat(" ", e.namespaceIndent)
+	e.setIndentSep()
 	return nil
 }
 
@@ -127,7 +122,7 @@ func (e *prettyConsoleEncoder) AddReflected(key string, value interface{}) error
 		}
 		if l-enc.buf.Len() == 0 {
 			// User-supplied reflectedEncoder is absent or a no-op. Fall
-			// back to dd
+			// back to the reflection dumper
 			if err := defaultReflectedEncoder(iw).Encode(value); err != nil {
 				return err
 			}
@@ -138,7 +133,7 @@ func (e *prettyConsoleEncoder) AddReflected(key string, value interface{}) error
 	putPrettyConsoleEncoder(enc)
 
 	e.inList = true
-	e.listSep = e.cfg.LineEnding + strings.Repeat(" ", e.namespaceIndent)
+	e.setIndentSep()
 	return nil
 }
 
@@ -148,7 +143,7 @@ func (e *prettyConsoleEncoder) AddByteString(key string, value []byte) {
 	e.appendSafeByte(value)
 
 	e.inList = true
-	e.listSep = e._listSepSpace
+	e.setListSep(e._listSepSpace)
 }
 
 func (e *prettyConsoleEncoder) AddBool(key string, value bool) {
@@ -157,7 +152,7 @@ func (e *prettyConsoleEncoder) AddBool(key string, value bool) {
 	e.buf.AppendBool(value)
 
 	e.inList = true
-	e.listSep = e._listSepSpace
+	e.setListSep(e._listSepSpace)
 }
 
 func (e *prettyConsoleEncoder) addComplex(key string, c complex128, precision int) {
@@ -177,7 +172,7 @@ func (e *prettyConsoleEncoder) addComplex(key string, c complex128, precision in
 	e.buf.AppendByte('i')
 
 	e.inList = true
-	e.listSep = e._listSepSpace
+	e.setListSep(e._listSepSpace)
 }
 
 func (e *prettyConsoleEncoder) AddDuration(key string, value time.Duration) {
@@ -196,7 +191,7 @@ func (e *prettyConsoleEncoder) AddDuration(key string, value time.Duration) {
 	}
 
 	e.inList = true
-	e.listSep = e._listSepSpace
+	e.setListSep(e._listSepSpace)
 }
 
 func (e *prettyConsoleEncoder) addFloat(key string, value float64, precision int) {
@@ -205,7 +200,7 @@ func (e *prettyConsoleEncoder) addFloat(key string, value float64, precision int
 	e.buf.AppendFloat(value, precision)
 
 	e.inList = true
-	e.listSep = e._listSepSpace
+	e.setListSep(e._listSepSpace)
 }
 
 func (e *prettyConsoleEncoder) AddInt64(key string, value int64) {
@@ -214,7 +209,7 @@ func (e *prettyConsoleEncoder) AddInt64(key string, value int64) {
 	e.buf.AppendInt(value)
 
 	e.inList = true
-	e.listSep = e._listSepSpace
+	e.setListSep(e._listSepSpace)
 }
 
 func (e *prettyConsoleEncoder) AddString(key, value string) {
@@ -223,7 +218,7 @@ func (e *prettyConsoleEncoder) AddString(key, value string) {
 	e.addSafeString(value)
 
 	e.inList = true
-	e.listSep = e._listSepSpace
+	e.setListSep(e._listSepSpace)
 }
 
 // FormattedString is similar to zap.String() but it does not escape the
@@ -261,7 +256,7 @@ func (e *prettyConsoleEncoder) addIndentedString(key string, s string) {
 	_, _ = iw.Write([]byte(s))
 
 	e.inList = true
-	e.listSep = e._listSepSpace
+	e.setListSep(e._listSepSpace)
 }
 
 func (e *prettyConsoleEncoder) AddTime(key string, value time.Time) {
@@ -272,7 +267,7 @@ func (e *prettyConsoleEncoder) AddTime(key string, value time.Time) {
 	e.buf.AppendTime(value, time.RFC3339)
 
 	e.inList = true
-	e.listSep = e._listSepSpace
+	e.setListSep(e._listSepSpace)
 }
 
 func (e *prettyConsoleEncoder) AddUint64(key string, value uint64) {
@@ -281,5 +276,5 @@ func (e *prettyConsoleEncoder) AddUint64(key string, value uint64) {
 	e.buf.AppendUint(value)
 
 	e.inList = true
-	e.listSep = e._listSepSpace
+	e.setListSep(e._listSepSpace)
 }

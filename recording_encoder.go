@@ -1,6 +1,7 @@
 package prettyconsole
 
 import (
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -28,13 +29,29 @@ func (r *recordingEncoder) Clone() zapcore.Encoder {
 // EncodeEntry implements zapcore.Encoder
 func (r recordingEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
 	// Must copy r's fields because encode entry will sort them. Copying fields
-	// too because it might be surprißsing to have the slice change under the
-	// caller!.
-	fieldsClone := make([]zapcore.Field, len(r.fields)+len(fields))
+	// too because it might be surprising to have the slice change under the
+	// caller. The scratch slice is pooled; it is cleared before being
+	// returned so pooled entries do not pin field values.
+	n := len(r.fields) + len(fields)
+	fp := _fieldsPool.Get().(*[]zapcore.Field)
+	if cap(*fp) < n {
+		*fp = make([]zapcore.Field, n)
+	}
+	fieldsClone := (*fp)[:n]
 	copy(fieldsClone, r.fields)
 	copy(fieldsClone[len(r.fields):], fields)
-	return r.e.EncodeEntry(entry, fieldsClone)
+	buf, err := r.e.EncodeEntry(entry, fieldsClone)
+	for i := range fieldsClone {
+		fieldsClone[i] = zapcore.Field{}
+	}
+	_fieldsPool.Put(fp)
+	return buf, err
 }
+
+var _fieldsPool = sync.Pool{New: func() interface{} {
+	s := make([]zapcore.Field, 0, 16)
+	return &s
+}}
 
 // AddArray implements zapcore.ObjectEncoder
 func (r *recordingEncoder) AddArray(key string, marshaler zapcore.ArrayMarshaler) error {
