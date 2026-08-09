@@ -3,7 +3,6 @@ module github.com/thessem/zap-prettyconsole
 go 1.20
 
 require (
-	github.com/Code-Hex/dd v1.1.0
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/multierr v1.11.0
