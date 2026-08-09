@@ -154,50 +154,50 @@ Log a typical HTTP access line (a message and seven scalar fields):
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 566 ns/op | +0% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 822 ns/op | +45% | 1 allocs/op
+| :zap: zap | 221 ns/op | +0% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 288 ns/op | +30% | 1 allocs/op
 
 Log an error wrapped with `github.com/pkg/errors`, stacktraces included - this encoder's home turf:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 3151 ns/op | +0% | 21 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 3152 ns/op | +0% | 27 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 1124 ns/op | -10% | 27 allocs/op
+| :zap: zap | 1247 ns/op | +0% | 21 allocs/op
 
 Log a plain struct with no marshaler interface, so both encoders fall back to reflection:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 774 ns/op | +0% | 8 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 1094 ns/op | +41% | 9 allocs/op
+| :zap: zap | 270 ns/op | +0% | 8 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 333 ns/op | +23% | 9 allocs/op
 
 Log a message and 10 fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 1680 ns/op | +0% | 5 allocs/op
-| :zap: zap (sugared) | 2228 ns/op | +33% | 10 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 3762 ns/op | +124% | 5 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 4399 ns/op | +162% | 10 allocs/op
+| :zap: zap | 583 ns/op | +0% | 5 allocs/op
+| :zap: zap (sugared) | 894 ns/op | +53% | 10 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 1307 ns/op | +124% | 5 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 1706 ns/op | +193% | 10 allocs/op
 
 Log a message with a logger that already has 10 fields of context.
 Like zap itself, this encoder renders accumulated context once (per level, since colours differ) and reuses it on every line that adds no new fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: :nail_care: zap-prettyconsole | 133 ns/op | -22% | 0 allocs/op
-| :zap: zap | 171 ns/op | +0% | 0 allocs/op
-| :zap: zap (sugared) | 189 ns/op | +11% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 196 ns/op | +15% | 1 allocs/op
+| :zap: zap | 48 ns/op | +0% | 0 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 49 ns/op | +2% | 0 allocs/op
+| :zap: zap (sugared) | 64 ns/op | +33% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 69 ns/op | +44% | 1 allocs/op
 
 Log a static string, without any context or `printf`-style templating:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 123 ns/op | +0% | 0 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 152 ns/op | +24% | 0 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 194 ns/op | +58% | 1 allocs/op
-| :zap: zap (sugared) | 245 ns/op | +99% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 34 ns/op | -24% | 0 allocs/op
+| :zap: zap | 45 ns/op | +0% | 0 allocs/op
+| :zap: zap (sugared) | 59 ns/op | +31% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 63 ns/op | +40% | 1 allocs/op
 
 Released under the [MIT License](LICENSE.txt)
 
