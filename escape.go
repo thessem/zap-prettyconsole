@@ -3,6 +3,7 @@ package prettyconsole
 import (
 	"bytes"
 	"io"
+	"math/bits"
 	"unicode/utf8"
 )
 
@@ -63,15 +64,47 @@ func (e *prettyConsoleEncoder) escapeByte(b byte) {
 	}
 }
 
+// plainRunEnd returns the end of the run of plain bytes starting at i,
+// checking eight bytes per step with SWAR bit tricks.
+func plainRunEnd[T string | []byte](s T, i int) int {
+	for i+8 <= len(s) {
+		v := uint64(s[i]) | uint64(s[i+1])<<8 | uint64(s[i+2])<<16 | uint64(s[i+3])<<24 |
+			uint64(s[i+4])<<32 | uint64(s[i+5])<<40 | uint64(s[i+6])<<48 | uint64(s[i+7])<<56
+		if m := escapeMask(v); m != 0 {
+			return i + bits.TrailingZeros64(m)/8
+		}
+		i += 8
+	}
+	for i < len(s) && byteClass[s[i]] == classPlain {
+		i++
+	}
+	return i
+}
+
+const (
+	swarLo = 0x0101010101010101
+	swarHi = 0x8080808080808080
+)
+
+// escapeMask sets 0x80 in every byte lane that is not plain: bytes below
+// 0x20, quotes, backslashes, and bytes with the high bit set. The
+// "has a byte less than n" and "has a zero byte" formulas are the
+// standard SWAR identities.
+func escapeMask(v uint64) uint64 {
+	lt32 := (v - swarLo*0x20) &^ v
+	quote := v ^ (swarLo * '"')
+	quote = (quote - swarLo) &^ quote
+	bslash := v ^ (swarLo * '\\')
+	bslash = (bslash - swarLo) &^ bslash
+	return (lt32 | quote | bslash | v) & swarHi
+}
+
 // addSafeString JSON-escapes a string and appends it to the internal buffer.
 func (e *prettyConsoleEncoder) addSafeString(s string) {
 	for i := 0; i < len(s); {
 		c := s[i]
 		if byteClass[c] == classPlain {
-			j := i + 1
-			for j < len(s) && byteClass[s[j]] == classPlain {
-				j++
-			}
+			j := plainRunEnd(s, i+1)
 			e.buf.AppendString(s[i:j])
 			i = j
 			continue
@@ -98,10 +131,7 @@ func (e *prettyConsoleEncoder) appendSafeByte(s []byte) {
 	for i := 0; i < len(s); {
 		c := s[i]
 		if byteClass[c] == classPlain {
-			j := i + 1
-			for j < len(s) && byteClass[s[j]] == classPlain {
-				j++
-			}
+			j := plainRunEnd(s, i+1)
 			_, _ = e.buf.Write(s[i:j]) // Explicitly ignore errors
 			i = j
 			continue

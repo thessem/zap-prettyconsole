@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap/buffer"
@@ -28,6 +29,16 @@ const (
 
 func DefaultTimeEncoder(format string) func(time.Time, zapcore.PrimitiveArrayEncoder) {
 	return func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+		// Fast path for this package's own encoder: write straight into
+		// the entry buffer instead of formatting through an intermediate.
+		if raw, ok := enc.(rawStringAppender); ok {
+			raw.addSeparator()
+			raw.buf.AppendString(ansiDarkGray)
+			raw.buf.AppendTime(t, format)
+			raw.buf.AppendString(ansiReset)
+			raw.inList = true
+			return
+		}
 		buf := _bufferPoolGet()
 		buf.AppendString(ansiDarkGray)
 		buf.AppendTime(t, format)
@@ -86,11 +97,13 @@ func defaultLevelEncoder(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 	enc.AppendString(unknownLevelLabel)
 }
 
+var cachedCwd = sync.OnceValues(os.Getwd)
+
 func defaultCallerEncoder(caller zapcore.EntryCaller, enc zapcore.PrimitiveArrayEncoder) {
 	callerFullPath := caller.FullPath()
 
 	var str string
-	if cwd, err := os.Getwd(); err == nil {
+	if cwd, err := cachedCwd(); err == nil {
 		if rel, err := filepath.Rel(cwd, callerFullPath); err == nil {
 			str = rel
 		}
@@ -105,15 +118,26 @@ func defaultCallerEncoder(caller zapcore.EntryCaller, enc zapcore.PrimitiveArray
 		}
 	}
 
-	buf := _bufferPoolGet()
-	colorize(buf, str, strconv.Itoa(colorBold))
-	enc.AppendString(buf.String())
-	buf.Free()
+	appendBold(enc, str)
 }
 
 func defaultNameEncoder(name string, enc zapcore.PrimitiveArrayEncoder) {
+	appendBold(enc, name)
+}
+
+// appendBold writes s in bold, straight into the entry buffer when the
+// consumer is this package's own encoder.
+func appendBold(enc zapcore.PrimitiveArrayEncoder, s string) {
+	if raw, ok := enc.(rawStringAppender); ok {
+		raw.addSeparator()
+		raw.buf.AppendString(ansiBold)
+		raw.buf.AppendString(s)
+		raw.buf.AppendString(ansiReset)
+		raw.inList = true
+		return
+	}
 	buf := _bufferPoolGet()
-	colorize(buf, name, strconv.Itoa(colorBold))
+	colorize(buf, s, strconv.Itoa(colorBold))
 	enc.AppendString(buf.String())
 	buf.Free()
 }
