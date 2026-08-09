@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/thessem/zap-prettyconsole/compare/v0.6.1...v0.7.0) (2026-08-09)
+
+
+### Features
+
+* Raise the minimum supported Go version to 1.23 ([#36](https://github.com/thessem/zap-prettyconsole/issues/36)) ([f546c3f](https://github.com/thessem/zap-prettyconsole/commit/f546c3f23b5ed02f6e23585931beda32388ae145))
+* Replace the dd dependency with a built-in reflection dumper ([#35](https://github.com/thessem/zap-prettyconsole/issues/35)) ([5d157e1](https://github.com/thessem/zap-prettyconsole/commit/5d157e1bcdcde98332b015bcbbc2a3467653b419))
+
+
+### Performance Improvements
+
+* Cache accumulated context and optimize the dumper hot paths ([#37](https://github.com/thessem/zap-prettyconsole/issues/37)) ([b494071](https://github.com/thessem/zap-prettyconsole/commit/b4940711faf20b217db1909657d4895e7eb5d93f))
+
 ## [0.6.1](https://github.com/thessem/zap-prettyconsole/compare/v0.6.0...v0.6.1) (2026-08-09)
 
 
