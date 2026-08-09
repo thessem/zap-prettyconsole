@@ -116,7 +116,7 @@ func TestReflection(t *testing.T) {
 	logger := prettyconsole.NewLogger(zap.DebugLevel)
 	sugar := logger.Sugar()
 	sugar.Debugw("reflection uses",
-		"library", "github.com/Code-Hex/dd",
+		"library", "reflect",
 		"status", "lovely",
 		"reflected", struct {
 			Foo int
