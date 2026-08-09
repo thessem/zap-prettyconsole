@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.1](https://github.com/thessem/zap-prettyconsole/compare/v0.6.0...v0.6.1) (2026-08-09)
+
+
+### Bug Fixes
+
+* Correct the declared Go floor to 1.20 and overhaul CI and releases ([#29](https://github.com/thessem/zap-prettyconsole/issues/29)) ([9c92ac2](https://github.com/thessem/zap-prettyconsole/commit/9c92ac270fda0803b4806c1481e5ac306ef6f4b8))
+* Fix encoder panic and encoding bugs, overhaul test suite ([#32](https://github.com/thessem/zap-prettyconsole/issues/32)) ([1ebeccd](https://github.com/thessem/zap-prettyconsole/commit/1ebeccdb17beccf4a5ca9e38110961e8503df367))
+
+
+### Performance Improvements
+
+* Remove allocations and branches from the encoding hot paths ([#33](https://github.com/thessem/zap-prettyconsole/issues/33)) ([4ec2afb](https://github.com/thessem/zap-prettyconsole/commit/4ec2afb73cd6b0288c50a526c581bc4a73d6cf3b))
+
+
+### Documentation
+
+* Fix benchmark comparisons and add realistic benchmark scenarios ([#34](https://github.com/thessem/zap-prettyconsole/issues/34)) ([ba5b964](https://github.com/thessem/zap-prettyconsole/commit/ba5b964bf2d7cc3279709c55f7120378bb6db45e))
+
 ## [0.6.0](https://github.com/thessem/zap-prettyconsole/compare/v0.5.2...v0.6.0) (2025-12-26)
 
 
