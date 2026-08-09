@@ -3,6 +3,7 @@ package prettyconsole
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"time"
 
 	"go.uber.org/zap"
@@ -24,7 +25,19 @@ func (e *prettyConsoleEncoder) AddUint16(k string, v uint16)   { e.AddUint64(k, 
 func (e *prettyConsoleEncoder) AddUint8(k string, v uint8)     { e.AddUint64(k, uint64(v)) }
 func (e *prettyConsoleEncoder) AddUintptr(k string, v uintptr) { e.AddUint64(k, uint64(v)) }
 func (e *prettyConsoleEncoder) AddBinary(key string, value []byte) {
-	e.AddString(key, base64.StdEncoding.EncodeToString(value))
+	e.addSeparator()
+	e.addKey(key)
+	// The base64 alphabet needs no escaping, so write it directly - via a
+	// stack buffer for the common small case.
+	if n := base64.StdEncoding.EncodedLen(len(value)); n <= 64 {
+		var arr [64]byte
+		base64.StdEncoding.Encode(arr[:n], value)
+		_, _ = e.buf.Write(arr[:n])
+	} else {
+		_, _ = e.buf.Write(base64.StdEncoding.AppendEncode(nil, value))
+	}
+	e.inList = true
+	e.setListSep(e._listSepSpace)
 }
 
 func (e *prettyConsoleEncoder) AddComplex64(k string, v complex64) {
@@ -242,6 +255,40 @@ func FormattedStringValue(value string) formattedString {
 }
 
 type formattedString string
+
+// addIndentedFormat streams v's %+v representation through the indenting
+// writer, dropping the single leading newline pkg/errors-style formatters
+// emit. Streaming avoids materialising stacktraces as one large string.
+func (e *prettyConsoleEncoder) addIndentedFormat(key string, v interface{}) {
+	e.addSeparator()
+	e.addKey(key)
+	tw := newlineTrimWriter{w: indentingWriter{
+		buf:        e.buf,
+		indent:     e.namespaceIndent,
+		lineEnding: []byte(e.cfg.LineEnding),
+	}}
+	_, _ = fmt.Fprintf(&tw, "%+v", v)
+
+	e.inList = true
+	e.setListSep(e._listSepSpace)
+}
+
+// newlineTrimWriter drops a single leading newline from the stream.
+type newlineTrimWriter struct {
+	w       indentingWriter
+	started bool
+}
+
+func (t *newlineTrimWriter) Write(p []byte) (int, error) {
+	if !t.started {
+		t.started = true
+		if len(p) > 0 && p[0] == '\n' {
+			n, err := t.w.Write(p[1:])
+			return n + 1, err
+		}
+	}
+	return t.w.Write(p)
+}
 
 // addIndentedString appends a string, replacing any newlines with the
 // current indent.

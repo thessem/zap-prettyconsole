@@ -3,7 +3,6 @@ package prettyconsole
 import (
 	"fmt"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -13,7 +12,21 @@ import (
 	"github.com/pkg/errors"
 )
 
-var reErrorJoins = regexp.MustCompile(`[\s,:;\\n]+$`)
+// trimErrorJoins removes trailing separator characters like ':' or ','
+// surrounded by whitespace. It is the allocation-free equivalent of the
+// historical regex [\s,:;\\n]+$ - including its quirk of also trimming
+// literal 'n' and backslash characters.
+func trimErrorJoins(s string) string {
+	for len(s) > 0 {
+		switch s[len(s)-1] {
+		case ' ', '\t', '\n', '\f', '\r', ',', ':', ';', '\\', 'n':
+			s = s[:len(s)-1]
+		default:
+			return s
+		}
+	}
+	return s
+}
 
 // Encodes the given error into fields of an object. A field with the given
 // name is added for the error message.
@@ -78,7 +91,7 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 			basic, _, _ = strings.Cut(basic, cbasic)
 			// TrimSuffix with separator characters like : or , surrounded by
 			// any number of spaces
-			basic = reErrorJoins.ReplaceAllString(strings.TrimSpace(basic), "")
+			basic = trimErrorJoins(strings.TrimSpace(basic))
 		}
 	}
 	if basic != "" {
@@ -111,11 +124,11 @@ func (e *prettyConsoleEncoder) encodeError(key string, err error) (retErr error)
 	if st, ok := err.(interface{ StackTrace() errors.StackTrace }); ok {
 		enc.OpenNamespace("")
 		enc.namespaceIndent += len("stacktrace=")
-		enc.addIndentedString("stacktrace", strings.TrimPrefix(fmt.Sprintf("%+v", st.StackTrace()), "\n"))
+		enc.addIndentedFormat("stacktrace", st.StackTrace())
 	} else if ef, ok := err.(fmt.Formatter); ok && !skipDetail {
 		enc.OpenNamespace("")
 		enc.namespaceIndent += len("detail=")
-		enc.addIndentedString("detail", strings.TrimPrefix(fmt.Sprintf("%+v", ef), "\n"))
+		enc.addIndentedFormat("detail", ef)
 	}
 
 	// Normal clean up is actually in the defer

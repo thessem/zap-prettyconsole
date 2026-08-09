@@ -362,6 +362,38 @@ func (d *Discarder) Write(b []byte) (int, error) {
 	return io.Discard.Write(b)
 }
 
+func BenchmarkReflectedField(b *testing.B) {
+	type inner struct {
+		Tags []string
+		Meta map[string]int
+	}
+	v := struct {
+		Name    string
+		Age     int
+		TraceID [16]byte
+		Raw     []byte
+		Nested  inner
+		At      time.Time
+	}{
+		Name: "bench", Age: 42,
+		TraceID: [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		Raw:     []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
+		Nested:  inner{Tags: []string{"a", "b", "c"}, Meta: map[string]int{"x": 1}},
+		At:      time.Unix(0, 0).UTC(),
+	}
+	enc := NewEncoder(NewEncoderConfig())
+	ent := zapcore.Entry{Level: zapcore.InfoLevel, Message: "m", Time: time.Unix(0, 0).UTC()}
+	fields := []zapcore.Field{zap.Reflect("data", v)}
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		buf, err := enc.EncodeEntry(ent, fields)
+		if err != nil {
+			b.Fatal(err)
+		}
+		buf.Free()
+	}
+}
+
 // BenchmarkWebRequest models the most common real-world log line: an HTTP
 // middleware access log with mixed scalar fields.
 func BenchmarkWebRequest(b *testing.B) {
@@ -421,7 +453,8 @@ func BenchmarkWrappedError(b *testing.B) {
 }
 
 // BenchmarkReflectedObject logs a plain struct that satisfies no marshaler
-// interface, so both encoders fall back to reflection.
+// interface: zap's JSON encoder reflects via encoding/json, this encoder
+// uses its built-in dumper.
 func BenchmarkReflectedObject(b *testing.B) {
 	type serverConfig struct {
 		Host     string
@@ -455,36 +488,4 @@ func BenchmarkReflectedObject(b *testing.B) {
 			}
 		})
 	})
-}
-
-func BenchmarkReflectedField(b *testing.B) {
-	type inner struct {
-		Tags []string
-		Meta map[string]int
-	}
-	v := struct {
-		Name    string
-		Age     int
-		TraceID [16]byte
-		Raw     []byte
-		Nested  inner
-		At      time.Time
-	}{
-		Name: "bench", Age: 42,
-		TraceID: [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-		Raw:     []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
-		Nested:  inner{Tags: []string{"a", "b", "c"}, Meta: map[string]int{"x": 1}},
-		At:      time.Unix(0, 0).UTC(),
-	}
-	enc := NewEncoder(NewEncoderConfig())
-	ent := zapcore.Entry{Level: zapcore.InfoLevel, Message: "m", Time: time.Unix(0, 0).UTC()}
-	fields := []zapcore.Field{zap.Reflect("data", v)}
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		buf, err := enc.EncodeEntry(ent, fields)
-		if err != nil {
-			b.Fatal(err)
-		}
-		buf.Free()
-	}
 }

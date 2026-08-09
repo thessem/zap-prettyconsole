@@ -451,3 +451,24 @@ func TestDumpUintptrAndUnsafe(t *testing.T) {
 	assert.Equal(t, "0x0", dump(t, uintptr(0)))
 	assert.Equal(t, "0x0", dump(t, unsafe.Pointer(nil)))
 }
+
+// TestDumpMapInPointerKey exercises the pooled map iterator's fallback: a
+// nested map rendered while a map key is still being iterated.
+func TestDumpMapInPointerKey(t *testing.T) {
+	inner := map[string]int{"i": 1}
+	m := map[*map[string]int]string{&inner: "v"}
+	out := dump(t, m)
+	assert.Contains(t, out, `"i": 1`)
+	assert.Contains(t, out, `"v"`)
+}
+
+// TestDumpSequentialReuse: repeated dumps through the pooled state (and
+// its reusable map iterator) must stay independent and deterministic.
+func TestDumpSequentialReuse(t *testing.T) {
+	m := map[string][]int{"a": {1}, "b": {2, 3}}
+	first := dump(t, m)
+	for i := 0; i < 10; i++ {
+		assert.Equal(t, first, dump(t, m))
+		assert.Equal(t, "nil", dump(t, nil))
+	}
+}

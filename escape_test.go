@@ -122,6 +122,10 @@ func FuzzEscaping(f *testing.F) {
 	f.Add("new\nline", "esc\x1b[31m", []byte{0xff, 0xfe}, int64(-1), -1.5)
 	f.Add("大きな", "\x1b]0;t\a", []byte("plain"), int64(1<<62), 1e300)
 	f.Add(strings.Repeat("x", 4096), "\r\t\"\\", []byte{0x1b, '[', '2', 'J'}, int64(-1<<62), 0.0/1e-323)
+	// SWAR boundary seeds: escapes at every offset within and across
+	// 8-byte words.
+	f.Add(strings.Repeat("a", 7)+"\n"+strings.Repeat("b", 8), strings.Repeat("c", 15)+"\"", []byte(strings.Repeat("d", 9)+"\x00"), int64(8), 8.0)
+	f.Add("\""+strings.Repeat("e", 23), strings.Repeat("f", 6)+"\\"+strings.Repeat("g", 6), []byte{0x7f, 0x80, 0xc2, 0xa9}, int64(16), 0.5)
 
 	enc := NewEncoder(NewEncoderConfig())
 	f.Fuzz(func(t *testing.T, msg, val string, raw []byte, n int64, fl float64) {
@@ -150,4 +154,76 @@ func FuzzEscaping(f *testing.F) {
 			}
 		}
 	})
+}
+
+// TestPlainRunEndDifferential checks the SWAR fast path against the
+// byte-class table exhaustively: every byte value at every position
+// within a window wider than one SWAR word.
+func TestPlainRunEndDifferential(t *testing.T) {
+	reference := func(s string, i int) int {
+		for i < len(s) && byteClass[s[i]] == classPlain {
+			i++
+		}
+		return i
+	}
+	for b := 0; b < 256; b++ {
+		for pos := 0; pos < 16; pos++ {
+			buf := []byte(strings.Repeat("a", 16))
+			buf[pos] = byte(b)
+			s := string(buf)
+			for start := 0; start <= pos; start++ {
+				assert.Equal(t, reference(s, start), plainRunEnd(s, start),
+					"byte %#x at position %d, start %d", b, pos, start)
+				assert.Equal(t, reference(s, start), plainRunEnd(buf, start),
+					"byte slice: byte %#x at position %d, start %d", b, pos, start)
+			}
+		}
+	}
+}
+
+// TestEscapingLongStrings pushes multi-word content with escapes at word
+// boundaries through the full encoder path.
+func TestEscapingLongStrings(t *testing.T) {
+	long := strings.Repeat("abcdefg", 100)
+	out := encodePlain(t, zap.String("s", long))
+	assert.Contains(t, out, long)
+
+	boundary := strings.Repeat("a", 7) + "\n" + strings.Repeat("b", 8) + "\"" + strings.Repeat("c", 9)
+	out = encodePlain(t, zap.String("s", boundary))
+	assert.Contains(t, out, strings.Repeat("a", 7)+`\n`+strings.Repeat("b", 8)+`\"`+strings.Repeat("c", 9))
+}
+
+// TestIndentingWriterChunkedEquivalence: streamed writes must produce the
+// same bytes as one combined write, since stacktraces are now streamed
+// through the writer in fmt-sized chunks.
+func TestIndentingWriterChunkedEquivalence(t *testing.T) {
+	input := "line one\nline two\n\nline four"
+	for _, chunks := range [][]string{
+		{input},
+		{"line one\n", "line two\n", "\n", "line four"},
+		{"line one", "\nline two\n\nline f", "our"},
+		{"l", "i", "n", "e", " ", "o", "n", "e", "\n", "line two\n\nline four"},
+	} {
+		var buf buffer.Buffer
+		iw := indentingWriter{indent: 3, buf: &buf, lineEnding: []byte("\n")}
+		for _, c := range chunks {
+			_, err := iw.Write([]byte(c))
+			require.NoError(t, err)
+		}
+		var want buffer.Buffer
+		iww := indentingWriter{indent: 3, buf: &want, lineEnding: []byte("\n")}
+		_, err := iww.Write([]byte(input))
+		require.NoError(t, err)
+		assert.Equal(t, want.String(), buf.String(), "chunks %q", chunks)
+	}
+}
+
+// TestNewlineTrimWriter drops exactly one leading newline and only from
+// the very start of the stream.
+func TestNewlineTrimWriter(t *testing.T) {
+	var buf buffer.Buffer
+	tw := newlineTrimWriter{w: indentingWriter{indent: 0, buf: &buf, lineEnding: []byte("\n")}}
+	_, _ = tw.Write([]byte("\nfirst"))
+	_, _ = tw.Write([]byte("\nsecond"))
+	assert.Equal(t, "first\nsecond", buf.String())
 }

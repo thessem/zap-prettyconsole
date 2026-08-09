@@ -465,3 +465,44 @@ func TestLoggerIntegration(t *testing.T) {
 	assert.Contains(t, out, "req=42")
 	assert.Contains(t, out, "stacktrace=")
 }
+
+// TestFieldSortingStability locks in the ordering contract of
+// sortFieldSegments: alphabetical within namespace segments, multi-line
+// types pushed to the back, namespaces never reordered - and, now that the
+// sort is an insertion sort, stability: equal keys keep their caller order.
+func TestFieldSortingStability(t *testing.T) {
+	t.Run("DuplicateKeysKeepOrder", func(t *testing.T) {
+		out := encodePlain(t,
+			zap.String("dup", "first"),
+			zap.String("dup", "second"),
+			zap.String("aaa", "third"),
+		)
+		first := strings.Index(out, "dup=first")
+		second := strings.Index(out, "dup=second")
+		require.NotEqual(t, -1, first)
+		require.NotEqual(t, -1, second)
+		assert.Less(t, first, second, "equal keys must keep caller order (stable sort)")
+	})
+	t.Run("TrailingNamespace", func(t *testing.T) {
+		out := encodePlain(t, zap.String("b", "2"), zap.String("a", "1"), zap.Namespace("tail"))
+		assert.Contains(t, out, "a=1 b=2")
+		assert.Contains(t, out, "tail")
+	})
+	t.Run("OnlyNamespace", func(t *testing.T) {
+		out := encodePlain(t, zap.Namespace("ns"))
+		assert.Contains(t, out, "ns")
+	})
+	t.Run("MultilineTypesPushedBack", func(t *testing.T) {
+		out := encodePlain(t,
+			zap.Error(errors.New("boom")),
+			zap.Object("obj", testStableMap{"k": "v"}),
+			zap.Array("arr", testArray{1}),
+			zap.String("zzz", "scalar"),
+		)
+		// scalar first despite key order, then array, object, error
+		zzz, arr := strings.Index(out, "zzz="), strings.Index(out, "arr=")
+		obj, errIdx := strings.Index(out, "obj"), strings.Index(out, "error=")
+		assert.True(t, zzz < arr && arr < obj && obj < errIdx,
+			"expected scalar < array < object < error, got %q", out)
+	})
+}
