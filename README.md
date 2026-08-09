@@ -175,29 +175,29 @@ Log a message and 10 fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 1958 ns/op | +0% | 5 allocs/op
-| :zap: zap (sugared) | 2565 ns/op | +31% | 10 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 3895 ns/op | +99% | 9 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 4439 ns/op | +127% | 14 allocs/op
+| :zap: zap | 590 ns/op | +0% | 5 allocs/op
+| :zap: zap (sugared) | 863 ns/op | +46% | 10 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 1232 ns/op | +109% | 9 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 1763 ns/op | +199% | 14 allocs/op
 
 Log a message with a logger that already has 10 fields of context.
 This is the one place zap has a structural advantage: it pre-encodes `With` fields once, while this encoder re-renders them on every line so they can be sorted alphabetically alongside the new fields:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 152 ns/op | +0% | 0 allocs/op
-| :zap: zap (sugared) | 211 ns/op | +39% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 3236 ns/op | +2029% | 5 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 3356 ns/op | +2108% | 4 allocs/op
+| :zap: zap | 54 ns/op | +0% | 0 allocs/op
+| :zap: zap (sugared) | 64 ns/op | +19% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 863 ns/op | +1498% | 4 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 868 ns/op | +1507% | 5 allocs/op
 
 Log a static string, without any context or `printf`-style templating:
 
 | Package | Time | Time % to zap | Objects Allocated |
 | :------ | :--: | :-----------: | :---------------: |
-| :zap: zap | 180 ns/op | +0% | 0 allocs/op
-| :zap: zap (sugared) | 186 ns/op | +3% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole | 206 ns/op | +14% | 1 allocs/op
-| :zap: :nail_care: zap-prettyconsole (sugared) | 248 ns/op | +38% | 2 allocs/op
+| :zap: zap | 45 ns/op | +0% | 0 allocs/op
+| :zap: :nail_care: zap-prettyconsole | 45 ns/op | +0% | 0 allocs/op
+| :zap: zap (sugared) | 59 ns/op | +31% | 1 allocs/op
+| :zap: :nail_care: zap-prettyconsole (sugared) | 61 ns/op | +36% | 1 allocs/op
 
 Released under the [MIT License](LICENSE.txt)
 
